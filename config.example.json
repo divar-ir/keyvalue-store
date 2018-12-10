@@ -1,0 +1,7 @@
+{
+    "policy": "readone-firstavailable",
+    "staticDiscovery": "127.0.0.1:6379",
+    "defaultWriteConsistency": "one",
+    "defaultReadConsistency": "one",
+    "redisListenPort": "6380"
+}
