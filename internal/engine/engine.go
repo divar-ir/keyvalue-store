@@ -128,20 +128,24 @@ func (e *keyValueEngine) waitForWriteCompletion(wg *sync.WaitGroup,
 	for {
 		select {
 		case <-done:
-			if finalResultChannel != nil {
-				if completed < requiredNodes || lastErr == nil {
-					finalResultChannel <- asyncWriteResult{err: keyvaluestore.ErrConsistency}
-				} else {
-					finalResultChannel <- asyncWriteResult{err: lastErr}
+			close(resultChannel)
+			done = nil
+
+		case result, ok := <-resultChannel:
+			if !ok {
+				if finalResultChannel != nil {
+					if completed < requiredNodes || lastErr == nil {
+						finalResultChannel <- asyncWriteResult{err: keyvaluestore.ErrConsistency}
+					} else {
+						finalResultChannel <- asyncWriteResult{err: lastErr}
+					}
+
+					close(finalResultChannel)
 				}
 
-				close(finalResultChannel)
-			}
+				return
 
-			return
-
-		case result := <-resultChannel:
-			if result.err == nil {
+			} else if result.err == nil {
 				completed = completed + 1
 				if completed >= requiredNodes && finalResultChannel != nil {
 					finalResultChannel <- asyncWriteResult{err: nil}
@@ -175,44 +179,47 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 	for {
 		select {
 		case <-done:
-			if finalResultChannel == nil {
-				losers := votes.Losers()
+			close(everyNodeResultChannel)
+			done = nil
 
-				if len(losers) > 0 && repair != nil {
-					maxVoteValue, _ := votes.MaxVote()
-					maxVoteItem := maxVoteValue.(voteItem)
+		case result, ok := <-everyNodeResultChannel:
+			if !ok {
+				if finalResultChannel == nil {
+					losers := votes.Losers()
 
-					winners := votes.Winners()
+					if len(losers) > 0 && repair != nil {
+						maxVoteValue, _ := votes.MaxVote()
+						maxVoteItem := maxVoteValue.(voteItem)
 
-					var args keyvaluestore.RepairArgs
-					if maxVoteItem.notFound {
-						args.Err = keyvaluestore.ErrNotFound
-					} else {
-						args.Value = maxVoteItem.value
+						winners := votes.Winners()
+
+						var args keyvaluestore.RepairArgs
+						if maxVoteItem.notFound {
+							args.Err = keyvaluestore.ErrNotFound
+						} else {
+							args.Value = maxVoteItem.value
+						}
+
+						for _, winner := range winners {
+							args.Winners = append(args.Winners, winner.(keyvaluestore.Backend))
+						}
+
+						for _, loser := range losers {
+							args.Losers = append(args.Losers, loser.(keyvaluestore.Backend))
+						}
+
+						repair(args)
 					}
-
-					for _, winner := range winners {
-						args.Winners = append(args.Winners, winner.(keyvaluestore.Backend))
-					}
-
-					for _, loser := range losers {
-						args.Losers = append(args.Losers, loser.(keyvaluestore.Backend))
-					}
-
-					repair(args)
+				} else if !votes.Empty() || lastErr == nil {
+					finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrConsistency}
+					close(finalResultChannel)
+				} else {
+					finalResultChannel <- asyncReadResult{err: lastErr}
+					close(finalResultChannel)
 				}
-			} else if !votes.Empty() || lastErr == nil {
-				finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrConsistency}
-				close(finalResultChannel)
-			} else {
-				finalResultChannel <- asyncReadResult{err: lastErr}
-				close(finalResultChannel)
-			}
 
-			return
-
-		case result := <-everyNodeResultChannel:
-			if result.err != nil {
+				return
+			} else if result.err != nil {
 				if result.err == keyvaluestore.ErrNotFound {
 					if votes.Add(voteItem{notFound: true}, result.node) >= requiredVotes && finalResultChannel != nil {
 						finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrNotFound}
