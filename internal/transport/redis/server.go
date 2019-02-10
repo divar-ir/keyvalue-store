@@ -25,6 +25,24 @@ type redisServer struct {
 	listener         net.Listener
 }
 
+type commandExecutionError struct {
+	err error
+}
+
+func (e *commandExecutionError) Error() string {
+	return e.err.Error()
+}
+
+func wrapStringAsError(msg string, args ...interface{}) error {
+	return &commandExecutionError{
+		err: fmt.Errorf(fmt.Sprintf(msg, args...)),
+	}
+}
+
+func wrapError(err error) error {
+	return &commandExecutionError{err: err}
+}
+
 func New(core keyvaluestore.Service, listenPort int,
 	readConsistency keyvaluestore.ConsistencyLevel,
 	writeConsistency keyvaluestore.ConsistencyLevel) keyvaluestore.Server {
@@ -94,6 +112,8 @@ func (s *redisServer) connectionLoop(parser *redisproto.Parser, writer *redispro
 	if err != nil {
 		_, ok := err.(*redisproto.ProtocolError)
 		if ok {
+			logrus.WithError(err).Error("unexpected protocol error")
+
 			return writer.WriteError(err.Error())
 		}
 
@@ -124,11 +144,20 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 		err = s.handleEchoCommand(command, writer)
 
 	default:
-		err = writer.WriteError(fmt.Sprintf("command not supported: %v", cmd))
+		logrus.WithField("cmd", cmd).Error("command not supported")
+
+		err = wrapStringAsError("command not supported: %v", cmd)
 	}
 
 	if err != nil {
-		return err
+		if execErr, ok := err.(*commandExecutionError); ok {
+			err = writer.WriteError(execErr.Error())
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 
 	if command.IsLast() {
@@ -144,14 +173,14 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 	var expiration time.Duration
 
 	if command.ArgCount() < 3 {
-		return writer.WriteError("expected at least 3 arguments for SET command")
+		return wrapStringAsError("expected at least 3 arguments for SET command")
 	}
 
 	if command.ArgCount() > 3 {
 		expirationMode := strings.ToUpper(string(command.Get(3)))
 		expirationTime, err := strconv.Atoi(string(command.Get(4)))
 		if err != nil {
-			return writer.WriteError(err.Error())
+			return wrapError(err)
 		}
 
 		switch expirationMode {
@@ -162,7 +191,9 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 			expiration = time.Duration(expirationTime) * time.Millisecond
 
 		default:
-			return writer.WriteError(fmt.Sprintf("unsupported expiration mode: %v", expirationMode))
+			logrus.WithField("expirationMode", expirationMode).Error("unsupported expiration mode")
+
+			return wrapStringAsError("unsupported expiration mode: %v", expirationMode)
 		}
 	}
 
@@ -177,7 +208,7 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 
 	err := s.core.Set(context.Background(), request)
 	if err != nil {
-		return writer.WriteError(err.Error())
+		return wrapError(err)
 	}
 
 	return writer.WriteBulkString("OK")
@@ -196,7 +227,7 @@ func (s *redisServer) handleDeleteCommand(command *redisproto.Command, writer *r
 
 		err := s.core.Delete(context.Background(), request)
 		if err != nil {
-			return writer.WriteError(err.Error())
+			return wrapError(err)
 		}
 	}
 
@@ -219,11 +250,11 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 			return writer.WriteBulk(nil)
 		}
 
-		return writer.WriteError(err.Error())
+		return wrapError(err)
 	}
 
 	if result == nil || result.Data == nil {
-		return writer.WriteError(fmt.Sprintf("result is nil or does not contain data: %v", result))
+		return wrapStringAsError("result is nil or does not contain data: %v", result)
 	}
 
 	return writer.WriteBulk(result.Data)
@@ -231,7 +262,7 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 
 func (s *redisServer) handlePingCommand(command *redisproto.Command, writer *redisproto.Writer) error {
 	if command.ArgCount() > 2 {
-		return writer.WriteError("expected 1-2 arguments for Ping command")
+		return wrapStringAsError("expected 1-2 arguments for Ping command")
 	}
 
 	if command.ArgCount() == 1 {
@@ -243,7 +274,7 @@ func (s *redisServer) handlePingCommand(command *redisproto.Command, writer *red
 
 func (s *redisServer) handleEchoCommand(command *redisproto.Command, writer *redisproto.Writer) error {
 	if command.ArgCount() != 2 {
-		return writer.WriteError("expected 2 arguments for Echo command")
+		return wrapStringAsError("expected 2 arguments for Echo command")
 	}
 
 	return writer.WriteBulk(command.Get(1))
