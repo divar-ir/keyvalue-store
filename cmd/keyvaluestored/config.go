@@ -18,7 +18,7 @@ type Config struct {
 }
 
 // LoadConfig loads the config from a file if specified, otherwise from the environment
-func LoadConfig(cmd *cobra.Command) (*Config, error) {
+func LoadConfig(cmd *cobra.Command, envPrefix string) (*Config, error) {
 	// Setting defaults for this application
 	viper.SetDefault("redisListenPort", 6380)
 	viper.SetDefault("backend", "redis")
@@ -29,7 +29,7 @@ func LoadConfig(cmd *cobra.Command) (*Config, error) {
 
 	// Read Config from ENV
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.SetEnvPrefix("keyvaluestore")
+	viper.SetEnvPrefix(envPrefix)
 	viper.AutomaticEnv()
 
 	// Read Config from Flags

@@ -28,8 +28,11 @@ var serveCmd = &cobra.Command{
 	Run:   serve,
 }
 
+var envPrefix *string
+
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	envPrefix = rootCmd.PersistentFlags().String("envprefix", "keyvaluestore", "prefix to use for environemnt variables")
 }
 
 func serve(cmd *cobra.Command, args []string) {
@@ -50,7 +53,7 @@ func serve(cmd *cobra.Command, args []string) {
 }
 
 func loadConfigOrPanic(cmd *cobra.Command) *Config {
-	config, err := LoadConfig(cmd)
+	config, err := LoadConfig(cmd, *envPrefix)
 	if err != nil {
 		log.WithError(err).Panic("Failed to load configurations")
 	}
