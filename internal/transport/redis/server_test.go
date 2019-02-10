@@ -286,6 +286,26 @@ func (s *RedisTransportTestSuite) TestGetShouldReturnEndpointError() {
 	wg.Wait()
 }
 
+func (s *RedisTransportTestSuite) TestShouldSupportPingCommnand() {
+	core := &keyvaluestore.Mock_Service{}
+
+	s.runServer(core)
+	client := s.makeClient()
+	value, err := client.Ping().Result()
+	s.Nil(err)
+	s.Equal("PONG", value)
+}
+
+func (s *RedisTransportTestSuite) TestShouldSupportEchoCommand() {
+	core := &keyvaluestore.Mock_Service{}
+
+	s.runServer(core)
+	client := s.makeClient()
+	value, err := client.Echo("hello").Result()
+	s.Nil(err)
+	s.Equal("hello", value)
+}
+
 func (s *RedisTransportTestSuite) runServer(core keyvaluestore.Service) {
 	s.server = redis.New(core, s.port, CONSISTENCY, CONSISTENCY)
 	s.Nil(s.server.Start())

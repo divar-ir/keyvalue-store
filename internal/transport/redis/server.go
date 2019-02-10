@@ -117,8 +117,14 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "GET":
 		err = s.handleGetCommand(command, writer)
 
+	case "PING":
+		err = s.handlePingCommand(command, writer)
+
+	case "ECHO":
+		err = s.handleEchoCommand(command, writer)
+
 	default:
-		err = writer.WriteError("Command not support")
+		err = writer.WriteError(fmt.Sprintf("command not supported: %v", cmd))
 	}
 
 	if err != nil {
@@ -221,4 +227,24 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 	}
 
 	return writer.WriteBulk(result.Data)
+}
+
+func (s *redisServer) handlePingCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() > 2 {
+		return writer.WriteError("expected 1-2 arguments for Ping command")
+	}
+
+	if command.ArgCount() == 1 {
+		return writer.WriteSimpleString("PONG")
+	}
+
+	return writer.WriteBulk(command.Get(1))
+}
+
+func (s *redisServer) handleEchoCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() != 2 {
+		return writer.WriteError("expected 2 arguments for Echo command")
+	}
+
+	return writer.WriteBulk(command.Get(1))
 }
