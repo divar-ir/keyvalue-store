@@ -143,6 +143,9 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "ECHO":
 		err = s.handleEchoCommand(command, writer)
 
+	case "SETNX":
+		err = s.handleSetNXCommand(command, writer)
+
 	default:
 		logrus.WithField("cmd", cmd).Error("command not supported")
 
@@ -171,44 +174,77 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 	key := string(command.Get(1))
 	value := command.Get(2)
 	var expiration time.Duration
+	nx := false
 
 	if command.ArgCount() < 3 {
 		return wrapStringAsError("expected at least 3 arguments for SET command")
 	}
 
-	if command.ArgCount() > 3 {
-		expirationMode := strings.ToUpper(string(command.Get(3)))
-		expirationTime, err := strconv.Atoi(string(command.Get(4)))
-		if err != nil {
-			return wrapError(err)
-		}
+	for i := 3; i < command.ArgCount(); i++ {
+		arg := strings.ToUpper(string(command.Get(i)))
 
-		switch expirationMode {
+		switch arg {
 		case "EX":
+			if i+1 >= command.ArgCount() {
+				return wrapStringAsError("expected another arg for EX subcommand in SET")
+			}
+			expirationTime, err := strconv.Atoi(string(command.Get(i + 1)))
+			i = i + 1
+			if err != nil {
+				return wrapError(err)
+			}
 			expiration = time.Duration(expirationTime) * time.Second
 
 		case "PX":
+			if i+1 >= command.ArgCount() {
+				return wrapStringAsError("expected another arg for EX subcommand in SET")
+			}
+			expirationTime, err := strconv.Atoi(string(command.Get(i + 1)))
+			i = i + 1
+			if err != nil {
+				return wrapError(err)
+			}
 			expiration = time.Duration(expirationTime) * time.Millisecond
 
-		default:
-			logrus.WithField("expirationMode", expirationMode).Error("unsupported expiration mode")
+		case "NX":
+			nx = true
 
-			return wrapStringAsError("unsupported expiration mode: %v", expirationMode)
+		default:
+			logrus.WithField("arg", arg).Error("unsupported SET argument")
+
+			return wrapStringAsError("unsupported SET argument: %v", arg)
 		}
 	}
 
-	request := &keyvaluestore.SetRequest{
-		Key:        key,
-		Data:       value,
-		Expiration: expiration,
-		Options: keyvaluestore.WriteOptions{
-			Consistency: s.writeConsistency,
-		},
-	}
+	var err error
 
-	err := s.core.Set(context.Background(), request)
-	if err != nil {
-		return wrapError(err)
+	if !nx {
+		request := &keyvaluestore.SetRequest{
+			Key:        key,
+			Data:       value,
+			Expiration: expiration,
+			Options: keyvaluestore.WriteOptions{
+				Consistency: s.writeConsistency,
+			},
+		}
+
+		err = s.core.Set(context.Background(), request)
+		if err != nil {
+			return wrapError(err)
+		}
+	} else {
+		request := &keyvaluestore.LockRequest{
+			Key:        key,
+			Expiration: expiration,
+			Options: keyvaluestore.WriteOptions{
+				Consistency: s.writeConsistency,
+			},
+		}
+
+		err = s.core.Lock(context.Background(), request)
+		if err != nil {
+			return wrapError(err)
+		}
 	}
 
 	return writer.WriteBulkString("OK")
@@ -278,4 +314,32 @@ func (s *redisServer) handleEchoCommand(command *redisproto.Command, writer *red
 	}
 
 	return writer.WriteBulk(command.Get(1))
+}
+
+func (s *redisServer) handleSetNXCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() != 3 {
+		return wrapStringAsError("expected 3 arguments for SetNX command")
+	}
+
+	key := string(command.Get(1))
+	request := &keyvaluestore.LockRequest{
+		Key: key,
+		Options: keyvaluestore.WriteOptions{
+			Consistency: s.writeConsistency,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	err := s.core.Lock(ctx, request)
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return writer.WriteInt(0)
+		}
+
+		return wrapError(err)
+	}
+
+	return writer.WriteInt(1)
 }

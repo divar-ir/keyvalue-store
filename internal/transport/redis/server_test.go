@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -304,6 +305,44 @@ func (s *RedisTransportTestSuite) TestShouldSupportEchoCommand() {
 	value, err := client.Echo("hello").Result()
 	s.Nil(err)
 	s.Equal("hello", value)
+}
+
+func (s *RedisTransportTestSuite) TestShouldSupportSetIfNotSetViaLocking() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Lock", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.LockRequest) bool {
+		defer wg.Done()
+
+		return true
+	})).Return(nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.SetNX(KEY, VALUE, 0).Result()
+	s.Nil(err)
+	s.True(ok)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestShouldConsiderDeadlockAsSetNXZeroResult() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Lock", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.LockRequest) bool {
+		defer wg.Done()
+
+		return true
+	})).Return(context.DeadlineExceeded)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.SetNX(KEY, VALUE, 0).Result()
+	s.Nil(err)
+	s.False(ok)
+	wg.Wait()
 }
 
 func (s *RedisTransportTestSuite) runServer(core keyvaluestore.Service) {
