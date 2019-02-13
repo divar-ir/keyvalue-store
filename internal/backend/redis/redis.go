@@ -10,12 +10,20 @@ import (
 )
 
 type redisBackend struct {
-	client *redis.Client
-	mutex  sync.Mutex
+	client  *redis.Client
+	address string
+	mutex   sync.Mutex
 }
 
-func New(client *redis.Client) keyvaluestore.Backend {
-	return &redisBackend{client: client}
+func New(client *redis.Client, address string) keyvaluestore.Backend {
+	return &redisBackend{
+		client:  client,
+		address: address,
+	}
+}
+
+func (r *redisBackend) Address() string {
+	return r.address
 }
 
 func (r *redisBackend) Set(key string, value []byte, expiration time.Duration) error {

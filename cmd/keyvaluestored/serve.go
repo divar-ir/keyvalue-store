@@ -104,7 +104,7 @@ func connectToHostOrPanic(config *Config, host string) keyvaluestore.Backend {
 
 func connectToRedisOrPanic(host string) keyvaluestore.Backend {
 	client := redis.NewClient(&redis.Options{Addr: host})
-	return redisBackend.New(client)
+	return redisBackend.New(client, host)
 }
 
 func getService(cluster keyvaluestore.Cluster,

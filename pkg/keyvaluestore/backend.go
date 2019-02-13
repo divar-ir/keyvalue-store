@@ -12,4 +12,5 @@ type Backend interface {
 	TTL(key string) (*time.Duration, error)
 	Get(key string) ([]byte, error)
 	Delete(key string) error
+	Address() string
 }

@@ -111,6 +111,10 @@ func (s *RedisBackendTestSuite) TestDeleteShouldDeleteExistingKey() {
 	s.False(s.db.Exists(KEY))
 }
 
+func (s *RedisBackendTestSuite) TestAddressShouldReturnCorrectAddress() {
+	s.Equal("localhost", s.backend.Address())
+}
+
 func (s *RedisBackendTestSuite) SetupTest() {
 	var err error
 
@@ -121,7 +125,7 @@ func (s *RedisBackendTestSuite) SetupTest() {
 
 	client := redis.NewClient(&redis.Options{Addr: s.db.Addr()})
 
-	s.backend = redisBackend.New(client)
+	s.backend = redisBackend.New(client, "localhost")
 }
 
 func (s *RedisBackendTestSuite) TearDownTest() {

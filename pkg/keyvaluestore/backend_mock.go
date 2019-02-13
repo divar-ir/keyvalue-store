@@ -92,3 +92,19 @@ func (m *Mock_Backend) Delete(key string) error {
 
 	return r0
 }
+
+func (m *Mock_Backend) Address() string {
+	ret := m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(string)
+		}
+	}
+
+	return r0
+
+}
