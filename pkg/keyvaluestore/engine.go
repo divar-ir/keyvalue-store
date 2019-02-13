@@ -15,6 +15,13 @@ type RepairArgs struct {
 	Losers  []Backend
 }
 
+type OperationMode int
+
+var (
+	OperationModeConcurrent OperationMode = 0
+	OperationModeSequential OperationMode = 1
+)
+
 type Engine interface {
 	io.Closer
 
@@ -22,5 +29,5 @@ type Engine interface {
 		operator ReadOperator, repair RepairOperator, cmp ValueComparer) (interface{}, error)
 
 	Write(nodes []Backend, acknowledgeRequired int,
-		operator WriteOperator) error
+		operator WriteOperator, mode OperationMode) error
 }

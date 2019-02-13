@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/cafebazaar/keyvalue-store/internal/engine"
 	"github.com/cafebazaar/keyvalue-store/internal/voting"
@@ -42,13 +44,13 @@ func TestEngineTestSuite(t *testing.T) {
 }
 
 func (s *EngineTestSuite) TestWriteShouldTryWriteOnAllBackends() {
-	s.Nil(s.engine.Write(s.nodes, 3, s.writeOperator))
+	s.Nil(s.engine.Write(s.nodes, 3, s.writeOperator, keyvaluestore.OperationModeConcurrent))
 	s.assertAllCalled()
 }
 
 func (s *EngineTestSuite) TestWriteShouldNotWaitOnSlowBackendsIfAcknowledgeAreSatisfied() {
 	s.setNodeSlow(0)
-	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator))
+	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator, keyvaluestore.OperationModeConcurrent))
 	s.False(s.mark[0])
 	s.continueSlow()
 	s.wg.Wait()
@@ -57,14 +59,64 @@ func (s *EngineTestSuite) TestWriteShouldNotWaitOnSlowBackendsIfAcknowledgeAreSa
 
 func (s *EngineTestSuite) TestWriteShouldIgnoreErrorIfAcknowledgeAreSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator))
+	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator, keyvaluestore.OperationModeConcurrent))
 	s.assertAllCalled()
 }
 
 func (s *EngineTestSuite) TestWriteShouldReportErrorIfAcknowledgeAreNotSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	s.NotNil(s.engine.Write(s.nodes, 3, s.writeOperator))
+	s.NotNil(s.engine.Write(s.nodes, 3, s.writeOperator, keyvaluestore.OperationModeConcurrent))
 	s.assertAllCalled()
+}
+
+func (s *EngineTestSuite) TestConcurrentWriteShouldWriteConcurrentlyOnNodes() {
+	var current int32
+	var max int32
+	var lock sync.Mutex
+	record := func(count int32) {
+		lock.Lock()
+		defer lock.Unlock()
+		if count > max {
+			max = count
+		}
+	}
+	op := func(backend keyvaluestore.Backend) error {
+		record(atomic.AddInt32(&current, 1))
+		defer atomic.AddInt32(&current, -1)
+		time.Sleep(100 * time.Millisecond)
+		return nil
+	}
+
+	s.Nil(s.engine.Write(s.nodes, 3, op, keyvaluestore.OperationModeConcurrent))
+	lock.Lock()
+	defer lock.Unlock()
+	s.True(max > 1)
+}
+
+func (s *EngineTestSuite) TestSequentialWriteShouldKeepNodePartialOrder() {
+	var current int32
+	var max int32
+	var lock sync.Mutex
+	var order int32
+	record := func(count int32) {
+		lock.Lock()
+		defer lock.Unlock()
+		if count > max {
+			max = count
+		}
+	}
+	op := func(backend keyvaluestore.Backend) error {
+		s.Equal(int32(s.indexOf(backend)+1), atomic.AddInt32(&order, 1))
+		record(atomic.AddInt32(&current, 1))
+		defer atomic.AddInt32(&current, -1)
+		time.Sleep(100 * time.Millisecond)
+		return nil
+	}
+
+	s.Nil(s.engine.Write(s.nodes, 3, op, keyvaluestore.OperationModeSequential))
+	lock.Lock()
+	defer lock.Unlock()
+	s.Equal(int32(1), max)
 }
 
 func (s *EngineTestSuite) TestReadShouldCallAllNodes() {
@@ -189,7 +241,7 @@ func (s *EngineTestSuite) TestWriteShouldImmediatelyReturnIfAcknowledgeCountIsZe
 	s.setNodeSlow(0)
 	s.setNodeSlow(1)
 	s.setNodeSlow(2)
-	s.Nil(s.engine.Write(s.nodes, 0, s.writeOperator))
+	s.Nil(s.engine.Write(s.nodes, 0, s.writeOperator, keyvaluestore.OperationModeConcurrent))
 	s.continueSlow()
 	s.wg.Wait()
 	s.assertAllCalled()

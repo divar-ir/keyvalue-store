@@ -50,7 +50,7 @@ func (s *CoreServiceTestSuite) TestSetShouldEncodeStringData() {
 	s.node1.On("Set", KEY, mock.MatchedBy(s.dataStrMatcher), mock.Anything).Once().Return(nil)
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(1)
+	s.applyConcurrentWriteToEngineOnce(1)
 	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
@@ -64,7 +64,7 @@ func (s *CoreServiceTestSuite) TestSetShouldEncodeStringData() {
 func (s *CoreServiceTestSuite) TestSetShouldNotUseDefaultWriteConsistencyIfRequestHasProvided() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
@@ -77,7 +77,7 @@ func (s *CoreServiceTestSuite) TestSetShouldNotUseDefaultWriteConsistencyIfReque
 func (s *CoreServiceTestSuite) TestSetShouldUseDefaultWriteConsistencyIfRequestIsEmpty() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
@@ -88,7 +88,7 @@ func (s *CoreServiceTestSuite) TestSetShouldNotEmployTTLIfRequestHasNotProvided(
 	s.node1.On("Set", KEY, mock.Anything, time.Duration(0)).Return(nil)
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(1)
+	s.applyConcurrentWriteToEngineOnce(1)
 	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
@@ -102,7 +102,7 @@ func (s *CoreServiceTestSuite) TestSetShouldEmployTTLIfRequestHasProvided() {
 	s.node1.On("Set", KEY, mock.Anything, 1*time.Minute).Return(nil)
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(1)
+	s.applyConcurrentWriteToEngineOnce(1)
 	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data:       s.dataStr,
 		Key:        KEY,
@@ -155,7 +155,7 @@ func (s *CoreServiceTestSuite) TestGetShouldRepairWithDeleteIfResultIsNotFound()
 	s.node1.On("Delete", KEY).Once().Return(nil)
 	s.applyCore()
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 	s.applyReadToEngineOnce(s.dataStr, keyvaluestore.ErrNotFound, &keyvaluestore.RepairArgs{
 		Err:    keyvaluestore.ErrNotFound,
 		Losers: []keyvaluestore.Backend{s.node1},
@@ -216,7 +216,7 @@ func (s *CoreServiceTestSuite) TestGetShouldAcquireTTLAndApplyToLosers() {
 		Value:   s.dataStr,
 	}, 3)
 	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 2)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
@@ -248,7 +248,7 @@ func (s *CoreServiceTestSuite) TestGetShouldNotApplyTTLDuringRepairIfItDoesNotEx
 		Value:   s.dataStr,
 	}, 3)
 	s.applyReadToEngineOnce(nil, nil, nil, 2)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
@@ -295,7 +295,7 @@ func (s *CoreServiceTestSuite) TestDeleteShouldCallDeleteOnNodes() {
 	s.node1.On("Delete", KEY).Once().Return(nil)
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(1)
+	s.applyConcurrentWriteToEngineOnce(1)
 	s.Nil(s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
 		Key: KEY,
 		Options: keyvaluestore.WriteOptions{
@@ -308,7 +308,7 @@ func (s *CoreServiceTestSuite) TestDeleteShouldCallDeleteOnNodes() {
 func (s *CoreServiceTestSuite) TestDeleteShouldNotUseDefaultWriteConsistencyIfProvidedByRequest() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 	s.Nil(s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
 		Key: KEY,
 		Options: keyvaluestore.WriteOptions{
@@ -320,14 +320,16 @@ func (s *CoreServiceTestSuite) TestDeleteShouldNotUseDefaultWriteConsistencyIfPr
 func (s *CoreServiceTestSuite) TestDeleteShouldUseDefaultWriteConsistencyIfNotProvidedByRequest() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
-	s.applyWriteToEngineOnce(0)
+	s.applyConcurrentWriteToEngineOnce(0)
 	s.Nil(s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
 		Key: KEY,
 	}))
 }
 
-func (s *CoreServiceTestSuite) applyWriteToEngineOnce(nodeCount int) {
-	s.engine.On("Write", mock.Anything, nodeCount, mock.Anything).Run(func(args mock.Arguments) {
+func (s *CoreServiceTestSuite) applyConcurrentWriteToEngineOnce(nodeCount int) {
+	s.engine.On("Write", mock.Anything, nodeCount, mock.Anything,
+		keyvaluestore.OperationModeConcurrent).Run(func(args mock.Arguments) {
+
 		backends := args.Get(0).([]keyvaluestore.Backend)
 		operator := args.Get(2).(keyvaluestore.WriteOperator)
 		for _, backend := range backends {

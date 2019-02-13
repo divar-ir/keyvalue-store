@@ -54,7 +54,7 @@ func (s *coreService) Set(ctx context.Context, request *keyvaluestore.SetRequest
 		return node.Set(request.Key, request.Data, request.Expiration)
 	}
 
-	return s.performWrite(request.Key, request.Options, writeOperator)
+	return s.performWrite(request.Key, request.Options, writeOperator, keyvaluestore.OperationModeConcurrent)
 }
 
 func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest) (*keyvaluestore.GetResponse, error) {
@@ -72,7 +72,7 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 
 	repairOperator := func(args keyvaluestore.RepairArgs) {
 		if args.Err == keyvaluestore.ErrNotFound {
-			if err := s.engine.Write(args.Losers, 0, deleteOperator); err != nil {
+			if err := s.engine.Write(args.Losers, 0, deleteOperator, keyvaluestore.OperationModeConcurrent); err != nil {
 				logrus.WithError(err).Error("unexpected error during read repair")
 			}
 
@@ -99,7 +99,7 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 				return node.Set(request.Key, args.Value.([]byte), ttl)
 			}
 
-			if err := s.engine.Write(args.Losers, 0, setOperator); err != nil {
+			if err := s.engine.Write(args.Losers, 0, setOperator, keyvaluestore.OperationModeConcurrent); err != nil {
 				logrus.WithError(err).Error("unexpected error during read repair")
 			}
 		}
@@ -121,18 +121,19 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 		return node.Delete(request.Key)
 	}
 
-	return s.performWrite(request.Key, request.Options, writeOperator)
+	return s.performWrite(request.Key, request.Options, writeOperator, keyvaluestore.OperationModeConcurrent)
 }
 
 func (s *coreService) performWrite(key string,
 	options keyvaluestore.WriteOptions,
-	operator keyvaluestore.WriteOperator) error {
+	operator keyvaluestore.WriteOperator,
+	mode keyvaluestore.OperationMode) error {
 
 	consistency := s.writeConsistency(options)
 	nodes := s.cluster.WriteBackends(key, consistency)
 	acknowledgeCount := s.cluster.WriteAcknowledgeRequired(key, consistency)
 
-	return s.engine.Write(nodes, acknowledgeCount, operator)
+	return s.engine.Write(nodes, acknowledgeCount, operator, mode)
 }
 
 func (s *coreService) performRead(key string,

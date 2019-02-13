@@ -42,13 +42,13 @@ func (m *Mock_Engine) Read(nodes []Backend, votesRequired int,
 }
 
 func (m *Mock_Engine) Write(nodes []Backend, acknowledgeRequired int,
-	operator WriteOperator) error {
+	operator WriteOperator, mode OperationMode) error {
 
-	ret := m.Called(nodes, acknowledgeRequired, operator)
+	ret := m.Called(nodes, acknowledgeRequired, operator, mode)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(nodes []Backend, acknowledgeRequired int, operator WriteOperator) error); ok {
-		r0 = rf(nodes, acknowledgeRequired, operator)
+	if rf, ok := ret.Get(0).(func(nodes []Backend, acknowledgeRequired int, operator WriteOperator, mode OperationMode) error); ok {
+		r0 = rf(nodes, acknowledgeRequired, operator, mode)
 	} else {
 		r0 = ret.Error(0)
 	}

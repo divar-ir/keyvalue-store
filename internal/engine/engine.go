@@ -73,12 +73,13 @@ func (e *keyValueEngine) Read(nodes []keyvaluestore.Backend,
 
 func (e *keyValueEngine) Write(nodes []keyvaluestore.Backend,
 	acknowledgeRequired int,
-	operator keyvaluestore.WriteOperator) error {
+	operator keyvaluestore.WriteOperator,
+	mode keyvaluestore.OperationMode) error {
 
 	var wg sync.WaitGroup
 	resultChannel := make(chan asyncWriteResult, len(nodes))
 
-	e.startWriteOperatorOnMultipleNodes(nodes, operator, &wg, resultChannel)
+	e.startWriteOperatorOnMultipleNodes(nodes, operator, &wg, resultChannel, mode)
 	completedChannel := e.startWaitingForWriteCompletion(&wg, resultChannel, acknowledgeRequired)
 
 	result := <-completedChannel
@@ -247,12 +248,26 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 func (e *keyValueEngine) startWriteOperatorOnMultipleNodes(nodes []keyvaluestore.Backend,
 	operator keyvaluestore.WriteOperator,
 	wg *sync.WaitGroup,
-	resultChannel chan asyncWriteResult) {
+	resultChannel chan asyncWriteResult,
+	mode keyvaluestore.OperationMode) {
 
-	for _, node := range nodes {
-		e.performAdd(wg)
-		e.operating.Add(1)
-		go e.performWriteOperatorOnSingleNode(node, operator, wg, resultChannel)
+	switch mode {
+	case keyvaluestore.OperationModeConcurrent:
+		for _, node := range nodes {
+			e.performAdd(wg, 1)
+			e.operating.Add(1)
+			go e.performWriteOperatorOnSingleNode(node, operator, wg, resultChannel)
+		}
+
+	case keyvaluestore.OperationModeSequential:
+		e.operating.Add(len(nodes))
+		e.performAdd(wg, len(nodes))
+
+		go func() {
+			for _, node := range nodes {
+				e.performWriteOperatorOnSingleNode(node, operator, wg, resultChannel)
+			}
+		}()
 	}
 }
 
@@ -262,7 +277,7 @@ func (e *keyValueEngine) startReadOperatorOnMultipleNodes(nodes []keyvaluestore.
 	resultChannel chan asyncReadResult) {
 
 	for _, node := range nodes {
-		e.performAdd(wg)
+		e.performAdd(wg, 1)
 		e.operating.Add(1)
 		go e.performReadOperatorOnSingleNode(node, operator, wg, resultChannel)
 	}
@@ -374,9 +389,9 @@ func (e *keyValueEngine) logError(err error) {
 	logrus.WithError(err).Error("redis error")
 }
 
-func (e *keyValueEngine) performAdd(wg *sync.WaitGroup) {
+func (e *keyValueEngine) performAdd(wg *sync.WaitGroup, delta int) {
 	if wg != nil {
-		wg.Add(1)
+		wg.Add(delta)
 	}
 }
 
