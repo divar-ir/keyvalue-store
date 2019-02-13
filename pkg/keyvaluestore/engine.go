@@ -7,12 +7,17 @@ import (
 type ReadOperator func(backend Backend) (interface{}, error)
 type WriteOperator func(backend Backend) error
 type RepairOperator func(args RepairArgs)
+type RollbackOperator func(args RollbackArgs)
 
 type RepairArgs struct {
 	Value   interface{}
 	Err     error
 	Winners []Backend
 	Losers  []Backend
+}
+
+type RollbackArgs struct {
+	Nodes []Backend
 }
 
 type OperationMode int
@@ -29,5 +34,7 @@ type Engine interface {
 		operator ReadOperator, repair RepairOperator, cmp ValueComparer) (interface{}, error)
 
 	Write(nodes []Backend, acknowledgeRequired int,
-		operator WriteOperator, mode OperationMode) error
+		operator WriteOperator,
+		rollback RollbackOperator,
+		mode OperationMode) error
 }

@@ -44,13 +44,37 @@ func TestEngineTestSuite(t *testing.T) {
 }
 
 func (s *EngineTestSuite) TestWriteShouldTryWriteOnAllBackends() {
-	s.Nil(s.engine.Write(s.nodes, 3, s.writeOperator, keyvaluestore.OperationModeConcurrent))
+	s.Nil(s.engine.Write(s.nodes, 3, s.writeOperator, nil, keyvaluestore.OperationModeConcurrent))
 	s.assertAllCalled()
+}
+
+func (s *EngineTestSuite) TestWriteShouldNotCallRollbackOperatorUponSuccess() {
+	var called int32
+
+	s.Nil(s.engine.Write(s.nodes, 3, s.writeOperator, func(args keyvaluestore.RollbackArgs) {
+		atomic.AddInt32(&called, 1)
+	}, keyvaluestore.OperationModeConcurrent))
+	s.assertAllCalled()
+	time.Sleep(100 * time.Millisecond)
+	s.Zero(called)
+}
+
+func (s *EngineTestSuite) TestWriteShouldCallRollbackOnSuccessfulNodesUponFailure() {
+	var called int32
+	s.setNodeOnError(2, errors.New("some error"))
+	s.NotNil(s.engine.Write(s.nodes, 3, s.writeOperator, func(args keyvaluestore.RollbackArgs) {
+		atomic.AddInt32(&called, 1)
+		s.Equal(2, len(args.Nodes))
+		s.Subset(args.Nodes, []keyvaluestore.Backend{s.node1, s.node2})
+	}, keyvaluestore.OperationModeConcurrent))
+	s.assertAllCalled()
+	time.Sleep(100 * time.Millisecond)
+	s.Equal(int32(1), called)
 }
 
 func (s *EngineTestSuite) TestWriteShouldNotWaitOnSlowBackendsIfAcknowledgeAreSatisfied() {
 	s.setNodeSlow(0)
-	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator, keyvaluestore.OperationModeConcurrent))
+	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator, nil, keyvaluestore.OperationModeConcurrent))
 	s.False(s.mark[0])
 	s.continueSlow()
 	s.wg.Wait()
@@ -59,13 +83,13 @@ func (s *EngineTestSuite) TestWriteShouldNotWaitOnSlowBackendsIfAcknowledgeAreSa
 
 func (s *EngineTestSuite) TestWriteShouldIgnoreErrorIfAcknowledgeAreSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator, keyvaluestore.OperationModeConcurrent))
+	s.Nil(s.engine.Write(s.nodes, 2, s.writeOperator, nil, keyvaluestore.OperationModeConcurrent))
 	s.assertAllCalled()
 }
 
 func (s *EngineTestSuite) TestWriteShouldReportErrorIfAcknowledgeAreNotSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	s.NotNil(s.engine.Write(s.nodes, 3, s.writeOperator, keyvaluestore.OperationModeConcurrent))
+	s.NotNil(s.engine.Write(s.nodes, 3, s.writeOperator, nil, keyvaluestore.OperationModeConcurrent))
 	s.assertAllCalled()
 }
 
@@ -87,7 +111,7 @@ func (s *EngineTestSuite) TestConcurrentWriteShouldWriteConcurrentlyOnNodes() {
 		return nil
 	}
 
-	s.Nil(s.engine.Write(s.nodes, 3, op, keyvaluestore.OperationModeConcurrent))
+	s.Nil(s.engine.Write(s.nodes, 3, op, nil, keyvaluestore.OperationModeConcurrent))
 	lock.Lock()
 	defer lock.Unlock()
 	s.True(max > 1)
@@ -113,7 +137,7 @@ func (s *EngineTestSuite) TestSequentialWriteShouldKeepNodePartialOrder() {
 		return nil
 	}
 
-	s.Nil(s.engine.Write(s.nodes, 3, op, keyvaluestore.OperationModeSequential))
+	s.Nil(s.engine.Write(s.nodes, 3, op, nil, keyvaluestore.OperationModeSequential))
 	lock.Lock()
 	defer lock.Unlock()
 	s.Equal(int32(1), max)
@@ -241,7 +265,7 @@ func (s *EngineTestSuite) TestWriteShouldImmediatelyReturnIfAcknowledgeCountIsZe
 	s.setNodeSlow(0)
 	s.setNodeSlow(1)
 	s.setNodeSlow(2)
-	s.Nil(s.engine.Write(s.nodes, 0, s.writeOperator, keyvaluestore.OperationModeConcurrent))
+	s.Nil(s.engine.Write(s.nodes, 0, s.writeOperator, nil, keyvaluestore.OperationModeConcurrent))
 	s.continueSlow()
 	s.wg.Wait()
 	s.assertAllCalled()

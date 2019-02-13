@@ -74,13 +74,14 @@ func (e *keyValueEngine) Read(nodes []keyvaluestore.Backend,
 func (e *keyValueEngine) Write(nodes []keyvaluestore.Backend,
 	acknowledgeRequired int,
 	operator keyvaluestore.WriteOperator,
+	rollback keyvaluestore.RollbackOperator,
 	mode keyvaluestore.OperationMode) error {
 
 	var wg sync.WaitGroup
 	resultChannel := make(chan asyncWriteResult, len(nodes))
 
 	e.startWriteOperatorOnMultipleNodes(nodes, operator, &wg, resultChannel, mode)
-	completedChannel := e.startWaitingForWriteCompletion(&wg, resultChannel, acknowledgeRequired)
+	completedChannel := e.startWaitingForWriteCompletion(&wg, resultChannel, rollback, acknowledgeRequired)
 
 	result := <-completedChannel
 	return result.err
@@ -88,11 +89,12 @@ func (e *keyValueEngine) Write(nodes []keyvaluestore.Backend,
 
 func (e *keyValueEngine) startWaitingForWriteCompletion(wg *sync.WaitGroup,
 	resultChannel chan asyncWriteResult,
+	rollback keyvaluestore.RollbackOperator,
 	requiredNodes int) chan asyncWriteResult {
 
 	ch := make(chan asyncWriteResult, 1)
 	e.operating.Add(1)
-	go e.waitForWriteCompletion(wg, resultChannel, requiredNodes, ch)
+	go e.waitForWriteCompletion(wg, resultChannel, requiredNodes, rollback, ch)
 	return ch
 }
 
@@ -112,6 +114,7 @@ func (e *keyValueEngine) startReadVote(wg *sync.WaitGroup,
 func (e *keyValueEngine) waitForWriteCompletion(wg *sync.WaitGroup,
 	resultChannel chan asyncWriteResult,
 	requiredNodes int,
+	rollback keyvaluestore.RollbackOperator,
 	finalResultChannel chan asyncWriteResult) {
 
 	defer e.operating.Done()
@@ -119,6 +122,7 @@ func (e *keyValueEngine) waitForWriteCompletion(wg *sync.WaitGroup,
 	done := e.beginWaitGroupMonitor(wg)
 	completed := 0
 	var lastErr error
+	var completedNodes []keyvaluestore.Backend
 
 	if requiredNodes == 0 {
 		finalResultChannel <- asyncWriteResult{err: nil}
@@ -142,12 +146,19 @@ func (e *keyValueEngine) waitForWriteCompletion(wg *sync.WaitGroup,
 					}
 
 					close(finalResultChannel)
+
+					if rollback != nil {
+						rollback(keyvaluestore.RollbackArgs{
+							Nodes: completedNodes,
+						})
+					}
 				}
 
 				return
 
 			} else if result.err == nil {
 				completed = completed + 1
+				completedNodes = append(completedNodes, result.node)
 				if completed >= requiredNodes && finalResultChannel != nil {
 					finalResultChannel <- asyncWriteResult{err: nil}
 					close(finalResultChannel)

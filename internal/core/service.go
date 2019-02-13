@@ -54,7 +54,23 @@ func (s *coreService) Set(ctx context.Context, request *keyvaluestore.SetRequest
 		return node.Set(request.Key, request.Data, request.Expiration)
 	}
 
-	return s.performWrite(request.Key, request.Options, writeOperator, keyvaluestore.OperationModeConcurrent)
+	deleteOperator := func(backend keyvaluestore.Backend) error {
+		return backend.Delete(request.Key)
+	}
+
+	deleteRollbackOperator := func(args keyvaluestore.RollbackArgs) {
+	}
+
+	rollbackOperator := func(args keyvaluestore.RollbackArgs) {
+		err := s.engine.Write(args.Nodes, 0, deleteOperator, deleteRollbackOperator,
+			keyvaluestore.OperationModeConcurrent)
+		if err != nil {
+			logrus.WithError(err).Error("unexpected error during SET rollback")
+		}
+	}
+
+	return s.performWrite(request.Key, request.Options,
+		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent)
 }
 
 func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest) (*keyvaluestore.GetResponse, error) {
@@ -66,13 +82,18 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 		return node.Delete(request.Key)
 	}
 
+	deleteRollbackOperator := func(args keyvaluestore.RollbackArgs) {
+	}
+
 	ttlOperator := func(node keyvaluestore.Backend) (interface{}, error) {
 		return node.TTL(request.Key)
 	}
 
 	repairOperator := func(args keyvaluestore.RepairArgs) {
 		if args.Err == keyvaluestore.ErrNotFound {
-			if err := s.engine.Write(args.Losers, 0, deleteOperator, keyvaluestore.OperationModeConcurrent); err != nil {
+			err := s.engine.Write(args.Losers, 0, deleteOperator, deleteRollbackOperator,
+				keyvaluestore.OperationModeConcurrent)
+			if err != nil {
 				logrus.WithError(err).Error("unexpected error during read repair")
 			}
 
@@ -99,7 +120,16 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 				return node.Set(request.Key, args.Value.([]byte), ttl)
 			}
 
-			if err := s.engine.Write(args.Losers, 0, setOperator, keyvaluestore.OperationModeConcurrent); err != nil {
+			setRollbackOperator := func(rollbackArgs keyvaluestore.RollbackArgs) {
+				err := s.engine.Write(rollbackArgs.Nodes, 0, deleteOperator, deleteRollbackOperator,
+					keyvaluestore.OperationModeConcurrent)
+				if err != nil {
+					logrus.WithError(err).Error("unexpected error during SET rollback")
+				}
+			}
+
+			err = s.engine.Write(args.Losers, 0, setOperator, setRollbackOperator, keyvaluestore.OperationModeConcurrent)
+			if err != nil {
 				logrus.WithError(err).Error("unexpected error during read repair")
 			}
 		}
@@ -121,19 +151,24 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 		return node.Delete(request.Key)
 	}
 
-	return s.performWrite(request.Key, request.Options, writeOperator, keyvaluestore.OperationModeConcurrent)
+	rollbackOperator := func(args keyvaluestore.RollbackArgs) {
+	}
+
+	return s.performWrite(request.Key, request.Options,
+		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent)
 }
 
 func (s *coreService) performWrite(key string,
 	options keyvaluestore.WriteOptions,
 	operator keyvaluestore.WriteOperator,
+	rollback keyvaluestore.RollbackOperator,
 	mode keyvaluestore.OperationMode) error {
 
 	consistency := s.writeConsistency(options)
 	nodes := s.cluster.WriteBackends(key, consistency)
 	acknowledgeCount := s.cluster.WriteAcknowledgeRequired(key, consistency)
 
-	return s.engine.Write(nodes, acknowledgeCount, operator, mode)
+	return s.engine.Write(nodes, acknowledgeCount, operator, rollback, mode)
 }
 
 func (s *coreService) performRead(key string,
