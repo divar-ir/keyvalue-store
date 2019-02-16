@@ -23,7 +23,7 @@ type RollbackArgs struct {
 type OperationMode int
 
 var (
-	OperationModeConcurrent OperationMode = 0
+	OperationModeConcurrent OperationMode
 	OperationModeSequential OperationMode = 1
 )
 
