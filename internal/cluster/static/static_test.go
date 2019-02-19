@@ -39,7 +39,7 @@ func (s *StaticClusterTestSuite) TestReadVoteShouldReturnOneForConsistencyOne() 
 }
 
 func (s *StaticClusterTestSuite) TestReadVoteShouldCountLocalConnection() {
-	s.Equal(3, s.makeCluster(2, true).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_ALL))
+	s.Equal(3, s.makeCluster(3, true).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_ALL))
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldReturnNodeCountForConsistencyAll() {
@@ -59,7 +59,7 @@ func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldReturnOneWithConsiste
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldCountLocalConnection() {
-	s.Equal(3, s.makeCluster(2, true).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_ALL))
+	s.Equal(2, s.makeCluster(2, true).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_ALL))
 }
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldReturnAllNodesInConsistencyAll() {
@@ -82,7 +82,7 @@ func (s *StaticClusterTestSuite) TestWriteBackendsShouldReturnAllNodesInConsiste
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldCountLocalConnection() {
 	nodes := s.makeCluster(2, true).WriteBackends("", keyvaluestore.ConsistencyLevel_ALL)
-	s.Equal(3, len(nodes))
+	s.Equal(2, len(nodes))
 	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.local})
 }
 
@@ -124,7 +124,7 @@ func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnOneNodeForConsisten
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldConsiderLocalConnection() {
-	nodes := s.makeCluster(2, true).ReadBackends("", keyvaluestore.ConsistencyLevel_ALL)
+	nodes := s.makeCluster(3, true).ReadBackends("", keyvaluestore.ConsistencyLevel_ALL)
 	s.Equal(3, len(nodes))
 	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.local})
 }

@@ -118,14 +118,16 @@ func (s staticCluster) Close() error {
 	return lastErr
 }
 
-func (s staticCluster) allNodes() []keyvaluestore.Backend {
-	backends := s.randomize(s.backends)
-
+func (s staticCluster) localNodeOrRandomNode() []keyvaluestore.Backend {
 	if s.local != nil {
-		return append([]keyvaluestore.Backend{s.local}, backends...)
+		return []keyvaluestore.Backend{s.local}
 	}
 
-	return backends
+	return s.allNodes()[:1]
+}
+
+func (s staticCluster) allNodes() []keyvaluestore.Backend {
+	return s.randomize(s.backends)
 }
 
 func (s staticCluster) randomize(backends []keyvaluestore.Backend) []keyvaluestore.Backend {
