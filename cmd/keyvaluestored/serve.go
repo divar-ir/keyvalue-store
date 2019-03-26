@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/cafebazaar/keyvalue-store/internal/core"
+	"github.com/pkg/profile"
 
 	"github.com/cafebazaar/keyvalue-store/internal/engine"
 	"github.com/cafebazaar/keyvalue-store/internal/voting"
@@ -38,6 +39,21 @@ func init() {
 func serve(cmd *cobra.Command, args []string) {
 	config := loadConfigOrPanic(cmd)
 
+	if config.Profiling {
+		// Read following blog on Go profiling:
+		// https://flaviocopes.com/golang-profiling/
+		//
+		// In order to export PDF:
+		// go tool pprof --pdf keyvaluestored  /tmp/profile108564303/cpu.pprof  > file.pdf
+		//
+		// In order to view profiling in web:
+		// go tool pprof -http 127.0.0.1:8080 keyvaluestored file2.pprof
+		//
+		// Other issues related to golang profiling:
+		// https://github.com/golang/go/issues/18138
+		defer profile.Start().Stop()
+		log.Warn("PROFILING IS ENABLED")
+	}
 	cluster := configureClusterOrPanic(config)
 	engine := configureEngineOrPanic(config)
 	svc := getService(cluster, engine, config)
