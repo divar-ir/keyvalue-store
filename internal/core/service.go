@@ -6,6 +6,9 @@ import (
 	"sort"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
@@ -70,8 +73,8 @@ func (s *coreService) Set(ctx context.Context, request *keyvaluestore.SetRequest
 		}
 	}
 
-	return s.performWrite(request.Key, request.Options,
-		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent)
+	return s.convertErrorToGRPC(s.performWrite(request.Key, request.Options,
+		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent))
 }
 
 func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest) (*keyvaluestore.GetResponse, error) {
@@ -139,7 +142,7 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 	rawResult, err := s.performRead(request.Key, request.Options, readOperator,
 		repairOperator, s.byteComparer)
 	if err != nil {
-		return nil, err
+		return nil, s.convertErrorToGRPC(err)
 	}
 
 	data := rawResult.([]byte)
@@ -155,8 +158,8 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 	rollbackOperator := func(args keyvaluestore.RollbackArgs) {
 	}
 
-	return s.performWrite(request.Key, request.Options,
-		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent)
+	return s.convertErrorToGRPC(s.performWrite(request.Key, request.Options,
+		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent))
 }
 
 func (s *coreService) Lock(ctx context.Context, request *keyvaluestore.LockRequest) error {
@@ -182,8 +185,8 @@ func (s *coreService) Lock(ctx context.Context, request *keyvaluestore.LockReque
 
 	// Use sequential (ordered) write sequence to prevent dining philosopher problem
 	// (a.k.a chance of deadlock)
-	return s.performWrite(request.Key, request.Options, writeOperator,
-		rollbackOperator, keyvaluestore.OperationModeSequential)
+	return s.convertErrorToGRPC(s.performWrite(request.Key, request.Options, writeOperator,
+		rollbackOperator, keyvaluestore.OperationModeSequential))
 }
 
 func (s *coreService) Unlock(ctx context.Context, request *keyvaluestore.UnlockRequest) error {
@@ -194,8 +197,8 @@ func (s *coreService) Unlock(ctx context.Context, request *keyvaluestore.UnlockR
 	rollbackOperator := func(args keyvaluestore.RollbackArgs) {
 	}
 
-	return s.performWrite(request.Key, request.Options, writeOperator,
-		rollbackOperator, keyvaluestore.OperationModeConcurrent)
+	return s.convertErrorToGRPC(s.performWrite(request.Key, request.Options, writeOperator,
+		rollbackOperator, keyvaluestore.OperationModeConcurrent))
 }
 
 func (s *coreService) performWrite(key string,
@@ -288,4 +291,24 @@ func (s *coreService) durationComparer(x, y interface{}) bool {
 
 func (s *coreService) majority(count int) int {
 	return (count / 2) + 1
+}
+
+func (s *coreService) convertErrorToGRPC(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	switch err {
+	case keyvaluestore.ErrNotFound:
+		return status.Error(codes.NotFound, keyvaluestore.ErrNotFound.Error())
+
+	case context.Canceled:
+		return status.Error(codes.Canceled, context.Canceled.Error())
+
+	case context.DeadlineExceeded:
+		return status.Error(codes.DeadlineExceeded, context.Canceled.Error())
+
+	default:
+		return status.Error(codes.Internal, err.Error())
+	}
 }

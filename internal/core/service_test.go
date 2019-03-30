@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/cafebazaar/keyvalue-store/internal/core"
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
@@ -52,13 +54,14 @@ func (s *CoreServiceTestSuite) TestSetShouldEncodeStringData() {
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(1)
-	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
+	err := s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
-	}))
+	})
+	s.Nil(err)
 	s.node1.AssertExpectations(s.T())
 }
 
@@ -66,23 +69,25 @@ func (s *CoreServiceTestSuite) TestSetShouldNotUseDefaultWriteConsistencyIfReque
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(0)
-	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
+	err := s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestSetShouldUseDefaultWriteConsistencyIfRequestIsEmpty() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.applyWriteToEngineOnce(0)
-	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
+	err := s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data: s.dataStr,
 		Key:  KEY,
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestSetShouldNotEmployTTLIfRequestHasNotProvided() {
@@ -90,12 +95,13 @@ func (s *CoreServiceTestSuite) TestSetShouldNotEmployTTLIfRequestHasNotProvided(
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(1)
-	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
+	err := s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Key: KEY,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestSetShouldEmployTTLIfRequestHasProvided() {
@@ -103,14 +109,15 @@ func (s *CoreServiceTestSuite) TestSetShouldEmployTTLIfRequestHasProvided() {
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(1)
-	s.Nil(s.core.Set(context.Background(), &keyvaluestore.SetRequest{
+	err := s.core.Set(context.Background(), &keyvaluestore.SetRequest{
 		Data:       s.dataStr,
 		Key:        KEY,
 		Expiration: 1 * time.Minute,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestGetShouldCallGetUponBackends() {
@@ -166,7 +173,7 @@ func (s *CoreServiceTestSuite) TestGetShouldRepairWithDeleteIfResultIsNotFound()
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
 	})
-	s.Equal(keyvaluestore.ErrNotFound, err)
+	s.assertStatusCode(err, codes.NotFound)
 	s.node1.AssertExpectations(s.T())
 }
 
@@ -296,12 +303,13 @@ func (s *CoreServiceTestSuite) TestDeleteShouldCallDeleteOnNodes() {
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(1)
-	s.Nil(s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
+	err := s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
 		Key: KEY,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
-	}))
+	})
+	s.Nil(err)
 	s.node1.AssertExpectations(s.T())
 }
 
@@ -309,21 +317,23 @@ func (s *CoreServiceTestSuite) TestDeleteShouldNotUseDefaultWriteConsistencyIfPr
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(0)
-	s.Nil(s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
+	err := s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
 		Key: KEY,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_ALL,
 		},
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestDeleteShouldUseDefaultWriteConsistencyIfNotProvidedByRequest() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.applyWriteToEngineOnce(0)
-	s.Nil(s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
+	err := s.core.Delete(context.Background(), &keyvaluestore.DeleteRequest{
 		Key: KEY,
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestLockShouldCallLockOnNode() {
@@ -331,9 +341,10 @@ func (s *CoreServiceTestSuite) TestLockShouldCallLockOnNode() {
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.applyWriteToEngineOnce(1, WithMode(keyvaluestore.OperationModeSequential))
 	s.node1.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
-	s.Nil(s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
+	err := s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
 		Key: KEY,
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestLockShouldPreserveOrder() {
@@ -344,9 +355,10 @@ func (s *CoreServiceTestSuite) TestLockShouldPreserveOrder() {
 	s.node1.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
 	s.node2.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
 	s.node3.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
-	s.Nil(s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
+	err := s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
 		Key: KEY,
-	}))
+	})
+	s.Nil(err)
 }
 
 func (s *CoreServiceTestSuite) TestLockShouldRollbackUsingUnlock() {
@@ -360,9 +372,10 @@ func (s *CoreServiceTestSuite) TestLockShouldRollbackUsingUnlock() {
 	s.applyWriteToEngineOnce(0)
 	s.node1.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(errors.New("some error"))
 	s.node1.On("Unlock", KEY).Once().Return(nil)
-	s.Nil(s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
+	err := s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
 		Key: KEY,
-	}))
+	})
+	s.Nil(err)
 	s.node1.AssertExpectations(s.T())
 }
 
@@ -371,10 +384,39 @@ func (s *CoreServiceTestSuite) TestUnlockShouldCallUnlockOnBackends() {
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.applyWriteToEngineOnce(1)
 	s.node1.On("Unlock", KEY).Once().Return(nil)
-	s.Nil(s.core.Unlock(context.Background(), &keyvaluestore.UnlockRequest{
+	err := s.core.Unlock(context.Background(), &keyvaluestore.UnlockRequest{
 		Key: KEY,
-	}))
+	})
+	s.Nil(err)
 	s.node1.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) assertStatusCode(err error, c codes.Code) {
+	grpcStatus, ok := status.FromError(err)
+
+	switch c {
+	case codes.OK:
+		if err != nil {
+			if ok {
+				s.Equal(codes.OK, grpcStatus.Code())
+			} else {
+				s.Nil(err)
+			}
+		}
+
+	case codes.Internal:
+		if err == nil {
+			s.NotNil(err)
+		} else if ok {
+			s.Equal(codes.Internal, grpcStatus.Code())
+		}
+
+	default:
+		s.True(ok)
+		if ok {
+			s.Equal(c, grpcStatus.Code())
+		}
+	}
 }
 
 func (s *CoreServiceTestSuite) applyWriteToEngineOnce(nodeCount int, options ...Option) {

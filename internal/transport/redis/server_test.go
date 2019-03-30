@@ -1,12 +1,14 @@
 package redis_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/phayes/freeport"
 
@@ -213,7 +215,7 @@ func (s *RedisTransportTestSuite) TestGetShouldBeAbleToReturnNotFoundError() {
 		s.Equal(KEY, request.Key)
 
 		return KEY == request.Key
-	})).Return(nil, keyvaluestore.ErrNotFound)
+	})).Return(nil, status.Error(codes.NotFound, ""))
 
 	s.runServer(core)
 	client := s.makeClient()
@@ -335,7 +337,7 @@ func (s *RedisTransportTestSuite) TestShouldConsiderDeadlockAsSetNXZeroResult() 
 		defer wg.Done()
 
 		return true
-	})).Return(context.DeadlineExceeded)
+	})).Return(status.Error(codes.DeadlineExceeded, "deadline exceeded"))
 
 	s.runServer(core)
 	client := s.makeClient()

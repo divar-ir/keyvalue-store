@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	redisproto "github.com/secmask/go-redisproto"
 	"github.com/sirupsen/logrus"
@@ -282,10 +284,11 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 
 	result, err := s.core.Get(context.Background(), request)
 	if err != nil {
-		if err == keyvaluestore.ErrNotFound {
+		grpcStatus, ok := status.FromError(err)
+
+		if ok && grpcStatus.Code() == codes.NotFound {
 			return writer.WriteBulk(nil)
 		}
-
 		return wrapError(err)
 	}
 
@@ -335,6 +338,11 @@ func (s *redisServer) handleSetNXCommand(command *redisproto.Command, writer *re
 	err := s.core.Lock(ctx, request)
 	if err != nil {
 		if err == context.DeadlineExceeded {
+			return writer.WriteInt(0)
+		}
+
+		grpcStatus, ok := status.FromError(err)
+		if ok && grpcStatus.Code() == codes.DeadlineExceeded {
 			return writer.WriteInt(0)
 		}
 
