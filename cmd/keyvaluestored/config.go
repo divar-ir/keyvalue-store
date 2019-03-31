@@ -14,6 +14,7 @@ type Config struct {
 	LocalConnection         string
 	DefaultWriteConsistency string
 	DefaultReadConsistency  string
+	Policy                  string
 	Backend                 string
 	Profiling               bool
 }
@@ -27,6 +28,7 @@ func LoadConfig(cmd *cobra.Command, envPrefix string) (*Config, error) {
 	viper.SetDefault("localConnection", "")
 	viper.SetDefault("defaultWriteConsistency", "majority")
 	viper.SetDefault("defaultReadConsistency", "majority")
+	viper.SetDefault("policy", "")
 	viper.SetDefault("profiling", false)
 
 	// Read Config from ENV

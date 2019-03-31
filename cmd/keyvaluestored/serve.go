@@ -104,6 +104,12 @@ func configureStaticDiscoveryClusterOrPanic(config *Config) keyvaluestore.Cluste
 			staticCluster.WithLocal(connectToHostOrPanic(config, config.LocalConnection)))
 	}
 
+	if config.Policy != "" {
+		for _, policy := range convertPolicyListOrPanic(config.Policy) {
+			options = append(options, staticCluster.WithPolicy(policy))
+		}
+	}
+
 	return staticCluster.New(nodes, options...)
 }
 
@@ -159,6 +165,31 @@ func convertConsistencyOrPanic(consistency string) keyvaluestore.ConsistencyLeve
 	default:
 		log.Panicf("unrecognized consistency level: %v", consistency)
 		return keyvaluestore.ConsistencyLevel_ALL
+	}
+}
+
+func convertPolicyListOrPanic(policyList string) []keyvaluestore.Policy {
+	items := strings.Split(policyList, ",")
+	var result []keyvaluestore.Policy
+
+	for _, item := range items {
+		result = append(result, convertPolicyOrPanic(item))
+	}
+
+	return result
+}
+
+func convertPolicyOrPanic(policy string) keyvaluestore.Policy {
+	switch strings.ToLower(policy) {
+	case "readone-localorrandomnode":
+		return keyvaluestore.PolicyReadOneLocalOrRandomNode
+
+	case "readone-firstavailable":
+		return keyvaluestore.PolicyReadOneFirstAvailable
+
+	default:
+		log.Panicf("unrecognized policy: %v", policy)
+		return 0
 	}
 }
 
