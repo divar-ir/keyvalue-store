@@ -305,6 +305,27 @@ func (s *CoreServiceTestSuite) TestGetShouldForfeitRepairIfTTLIsZero() {
 	s.node3.AssertExpectations(s.T())
 }
 
+func (s *CoreServiceTestSuite) TestGetShouldUseVotingModeFromClusterView() {
+	s.node1.On("Get", KEY).Once().Return(s.dataStr, nil)
+
+	s.applyCore()
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL,
+		s.WithVotingMode(keyvaluestore.VotingModeVoteOnNotFound))
+	s.applyReadToEngineOnce(s.dataStr, nil, nil, 1,
+		keyvaluestore.VotingModeVoteOnNotFound)
+
+	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+	s.node2.AssertExpectations(s.T())
+	s.node3.AssertExpectations(s.T())
+}
+
 func (s *CoreServiceTestSuite) TestDeleteShouldCallDeleteOnNodes() {
 	s.node1.On("Delete", KEY).Once().Return(nil)
 	s.applyCore()
@@ -481,17 +502,42 @@ func (s *CoreServiceTestSuite) applyReadToEngineOnce(result interface{}, err err
 		}).Return(result, err)
 }
 
-func (s *CoreServiceTestSuite) applyCluster(nodes int, consistency keyvaluestore.ConsistencyLevel) {
-	s.nodes = ([]keyvaluestore.Backend{s.node1, s.node2, s.node3})[:nodes]
+type clusterOptionContext struct {
+	readView  keyvaluestore.ReadClusterView
+	writeView keyvaluestore.WriteClusterView
+}
 
-	s.cluster.On("Read", KEY, consistency).Return(keyvaluestore.ReadClusterView{
-		Backends:         s.nodes,
-		VoteRequired: len(s.nodes),
-	}, nil)
-	s.cluster.On("Write", KEY, consistency).Return(keyvaluestore.WriteClusterView{
-		Backends:            s.nodes,
-		AcknowledgeRequired: len(s.nodes),
-	}, nil)
+type clusterOption func(o *clusterOptionContext)
+
+func (s *CoreServiceTestSuite) applyCluster(
+	nodes int, consistency keyvaluestore.ConsistencyLevel,
+	options ...clusterOption) {
+
+	s.nodes = ([]keyvaluestore.Backend{s.node1, s.node2, s.node3})[:nodes]
+	optionContext := clusterOptionContext{
+		readView: keyvaluestore.ReadClusterView{
+			Backends:     s.nodes,
+			VoteRequired: len(s.nodes),
+			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
+		},
+		writeView: keyvaluestore.WriteClusterView{
+			Backends:            s.nodes,
+			AcknowledgeRequired: len(s.nodes),
+		},
+	}
+
+	for _, option := range options {
+		option(&optionContext)
+	}
+
+	s.cluster.On("Read", KEY, consistency).Return(optionContext.readView, nil)
+	s.cluster.On("Write", KEY, consistency).Return(optionContext.writeView, nil)
+}
+
+func (s *CoreServiceTestSuite) WithVotingMode(mode keyvaluestore.VotingMode) clusterOption {
+	return func(o *clusterOptionContext) {
+		o.readView.VotingMode = mode
+	}
 }
 
 func (s *CoreServiceTestSuite) applyCore(options ...core.Option) {

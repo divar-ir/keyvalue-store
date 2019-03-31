@@ -43,6 +43,7 @@ func (s staticCluster) Read(key string,
 		return keyvaluestore.ReadClusterView{
 			Backends:     allNodes,
 			VoteRequired: len(allNodes),
+			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
 		}, nil
 
 	case keyvaluestore.ConsistencyLevel_MAJORITY:
@@ -50,12 +51,14 @@ func (s staticCluster) Read(key string,
 		return keyvaluestore.ReadClusterView{
 			Backends:     allNodes,
 			VoteRequired: s.majority(len(allNodes)),
+			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
 		}, nil
 
 	case keyvaluestore.ConsistencyLevel_ONE:
 		return keyvaluestore.ReadClusterView{
 			Backends:     s.localNodeOrRandomNode(),
 			VoteRequired: 1,
+			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
 		}, nil
 
 	default:

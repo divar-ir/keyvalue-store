@@ -237,7 +237,7 @@ func (s *coreService) performRead(key string,
 	}
 
 	return s.engine.Read(view.Backends, view.VoteRequired, readOperator, repairOperator, comparer,
-		keyvaluestore.VotingModeVoteOnNotFound)
+		view.VotingMode)
 }
 
 func (s *coreService) sortNodes(nodes []keyvaluestore.Backend) []keyvaluestore.Backend {

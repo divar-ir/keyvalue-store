@@ -14,6 +14,7 @@ type Cluster interface {
 type ReadClusterView struct {
 	Backends     []Backend
 	VoteRequired int
+	VotingMode   VotingMode
 }
 
 type WriteClusterView struct {
