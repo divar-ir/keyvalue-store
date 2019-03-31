@@ -484,10 +484,14 @@ func (s *CoreServiceTestSuite) applyReadToEngineOnce(result interface{}, err err
 func (s *CoreServiceTestSuite) applyCluster(nodes int, consistency keyvaluestore.ConsistencyLevel) {
 	s.nodes = ([]keyvaluestore.Backend{s.node1, s.node2, s.node3})[:nodes]
 
-	s.cluster.On("ReadBackends", KEY, consistency).Return(s.nodes)
-	s.cluster.On("WriteBackends", KEY, consistency).Return(s.nodes)
-	s.cluster.On("ReadVoteRequired", KEY, consistency).Return(len(s.nodes))
-	s.cluster.On("WriteAcknowledgeRequired", KEY, consistency).Return(len(s.nodes))
+	s.cluster.On("Read", KEY, consistency).Return(keyvaluestore.ReadClusterView{
+		Backends:         s.nodes,
+		VoteRequired: len(s.nodes),
+	}, nil)
+	s.cluster.On("Write", KEY, consistency).Return(keyvaluestore.WriteClusterView{
+		Backends:            s.nodes,
+		AcknowledgeRequired: len(s.nodes),
+	}, nil)
 }
 
 func (s *CoreServiceTestSuite) applyCore(options ...core.Option) {

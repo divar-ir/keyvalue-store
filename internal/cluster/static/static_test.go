@@ -23,81 +23,102 @@ func TestStaticClusterTestSuite(t *testing.T) {
 }
 
 func (s *StaticClusterTestSuite) TestReadVoteShouldReturnNumberOfBackendsForConsistencyLevelAll() {
-	s.Equal(3, s.makeCluster(3, false).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_ALL))
+	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(3, view.VoteRequired)
 }
 
 func (s *StaticClusterTestSuite) TestReadVoteShouldReturnMajorityWithEvenBackends() {
-	s.Equal(2, s.makeCluster(3, false).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_MAJORITY))
+	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(2, view.VoteRequired)
 }
 
 func (s *StaticClusterTestSuite) TestReadVoteShouldReturnMajorityWithOddBackends() {
-	s.Equal(3, s.makeCluster(4, false).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_MAJORITY))
+	view, err := s.makeCluster(4, false).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(3, view.VoteRequired)
 }
 
 func (s *StaticClusterTestSuite) TestReadVoteShouldReturnOneForConsistencyOne() {
-	s.Equal(1, s.makeCluster(3, false).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_ONE))
+	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(1, view.VoteRequired)
 }
 
 func (s *StaticClusterTestSuite) TestReadVoteShouldCountLocalConnection() {
-	s.Equal(3, s.makeCluster(3, true).ReadVoteRequired("", keyvaluestore.ConsistencyLevel_ALL))
+	view, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(3, view.VoteRequired)
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldReturnNodeCountForConsistencyAll() {
-	s.Equal(3, s.makeCluster(3, false).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_ALL))
+	view, err := s.makeCluster(3, false).Write("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(3, view.AcknowledgeRequired)
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldReturnMajorityWithEvenBackends() {
-	s.Equal(2, s.makeCluster(3, false).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_MAJORITY))
+	view, err := s.makeCluster(3, false).Write("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(2, view.AcknowledgeRequired)
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldReturnMajorityWithOddBackends() {
-	s.Equal(3, s.makeCluster(4, false).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_MAJORITY))
+	view, err := s.makeCluster(4, false).Write("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(3, view.AcknowledgeRequired)
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldReturnOneWithConsistencyOne() {
-	s.Equal(1, s.makeCluster(3, false).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_ONE))
+	view, err := s.makeCluster(3, false).Write("", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(1, view.AcknowledgeRequired)
 }
 
 func (s *StaticClusterTestSuite) TestWriteAcknowledgeShouldCountLocalConnection() {
-	s.Equal(2, s.makeCluster(2, true).WriteAcknowledgeRequired("", keyvaluestore.ConsistencyLevel_ALL))
+	view, err := s.makeCluster(2, true).Write("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(2, view.AcknowledgeRequired)
 }
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldReturnAllNodesInConsistencyAll() {
-	nodes := s.makeCluster(3, false).WriteBackends("", keyvaluestore.ConsistencyLevel_ALL)
-	s.Equal(3, len(nodes))
-	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
+	view, err := s.makeCluster(3, false).Write("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldReturnAllNodesInConsistencyMajority() {
-	nodes := s.makeCluster(3, false).WriteBackends("", keyvaluestore.ConsistencyLevel_MAJORITY)
-	s.Equal(3, len(nodes))
-	s.Subset([]keyvaluestore.Backend{s.node1, s.node2, s.node3}, nodes)
+	view, err := s.makeCluster(3, false).Write("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldReturnAllNodesInConsistencyOne() {
-	nodes := s.makeCluster(3, false).WriteBackends("", keyvaluestore.ConsistencyLevel_ONE)
-	s.Equal(3, len(nodes))
-	s.Subset([]keyvaluestore.Backend{s.node1, s.node2, s.node3}, nodes)
+	view, err := s.makeCluster(3, false).Write("", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldCountLocalConnection() {
-	nodes := s.makeCluster(2, true).WriteBackends("", keyvaluestore.ConsistencyLevel_ALL)
-	s.Equal(2, len(nodes))
-	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.local})
-}
-
-func (s *StaticClusterTestSuite) TestWriteBackendsShouldPriotorizeLocalConnection() {
-	nodes := s.makeCluster(2, true).WriteBackends("", keyvaluestore.ConsistencyLevel_ALL)
-	s.Equal(s.local, nodes[0])
+	view, err := s.makeCluster(2, true).Write("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(2, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.local})
 }
 
 func (s *StaticClusterTestSuite) TestWriteBackendsShouldRandomizeNodes() {
 	b := s.makeCluster(3, false)
-	first := b.WriteBackends("", keyvaluestore.ConsistencyLevel_ALL)[0]
+	firstView, err := b.Write("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
 	found := false
 	for i := 0; i < 20; i++ {
-		second := b.WriteBackends("", keyvaluestore.ConsistencyLevel_ALL)[0]
-		if first != second {
+		secondView, err := b.Write("", keyvaluestore.ConsistencyLevel_ALL)
+		s.Nil(err)
+		if firstView.Backends[0] != secondView.Backends[0] {
 			found = true
 			break
 		}
@@ -106,36 +127,42 @@ func (s *StaticClusterTestSuite) TestWriteBackendsShouldRandomizeNodes() {
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnAllNodesInConsistencyAll() {
-	nodes := s.makeCluster(3, false).ReadBackends("", keyvaluestore.ConsistencyLevel_ALL)
-	s.Equal(3, len(nodes))
-	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
+	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnAllNodesInConsistencyMajority() {
-	nodes := s.makeCluster(3, false).ReadBackends("", keyvaluestore.ConsistencyLevel_MAJORITY)
-	s.Equal(3, len(nodes))
-	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
+	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnOneNodeForConsistencyOne() {
-	nodes := s.makeCluster(3, false).ReadBackends("", keyvaluestore.ConsistencyLevel_ONE)
-	s.Equal(1, len(nodes))
-	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
+	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(1, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldConsiderLocalConnection() {
-	nodes := s.makeCluster(3, true).ReadBackends("", keyvaluestore.ConsistencyLevel_ALL)
-	s.Equal(3, len(nodes))
-	s.Subset(nodes, []keyvaluestore.Backend{s.node1, s.node2, s.local})
+	view, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.local})
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldRandomizeNodes() {
 	b := s.makeCluster(3, false)
-	first := b.ReadBackends("", keyvaluestore.ConsistencyLevel_ALL)[0]
+	firstView, err := b.Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
 	found := false
 	for i := 0; i < 20; i++ {
-		second := b.ReadBackends("", keyvaluestore.ConsistencyLevel_ALL)[0]
-		if first != second {
+		secondView, err := b.Read("", keyvaluestore.ConsistencyLevel_ALL)
+		s.Nil(err)
+		if firstView.Backends[0] != secondView.Backends[0] {
 			found = true
 			break
 		}
@@ -144,9 +171,10 @@ func (s *StaticClusterTestSuite) TestReadBackendsShouldRandomizeNodes() {
 }
 
 func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnOnlyLocalConnection() {
-	nodes := s.makeCluster(2, false).ReadBackends("", keyvaluestore.ConsistencyLevel_ONE)
-	s.Equal(1, len(nodes))
-	s.Equal(s.local, nodes[0])
+	view, err := s.makeCluster(2, false).Read("", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(1, len(view.Backends))
+	s.Equal(s.local, view.Backends[0])
 }
 
 func (s *StaticClusterTestSuite) TestCloseShouldCloseAllBackends() {

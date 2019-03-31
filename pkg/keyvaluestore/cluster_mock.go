@@ -19,58 +19,46 @@ func (m *Mock_Cluster) Close() error {
 	return r0
 }
 
-func (m *Mock_Cluster) ReadBackends(key string, consistency ConsistencyLevel) []Backend {
+func (m *Mock_Cluster) Read(key string, consistency ConsistencyLevel) (ReadClusterView, error) {
 	ret := m.Called(key, consistency)
 
-	var r0 []Backend
-	if rf, ok := ret.Get(0).(func(key string, consistency ConsistencyLevel) []Backend); ok {
+	var r0 ReadClusterView
+	if rf, ok := ret.Get(0).(func(key string, consistency ConsistencyLevel) ReadClusterView); ok {
 		r0 = rf(key, consistency)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]Backend)
+			r0 = ret.Get(0).(ReadClusterView)
 		}
 	}
 
-	return r0
-}
-
-func (m *Mock_Cluster) ReadVoteRequired(key string, consistency ConsistencyLevel) int {
-	ret := m.Called(key, consistency)
-
-	var r0 int
-	if rf, ok := ret.Get(0).(func(key string, consistency ConsistencyLevel) int); ok {
-		r0 = rf(key, consistency)
+	var r1 error
+	if rf, ok := ret.Get(1).(func(key string, consistency ConsistencyLevel) error); ok {
+		r1 = rf(key, consistency)
 	} else {
-		r0 = ret.Get(0).(int)
+		r1 = ret.Error(1)
 	}
 
-	return r0
+	return r0, r1
 }
 
-func (m *Mock_Cluster) WriteBackends(key string, consistency ConsistencyLevel) []Backend {
+func (m *Mock_Cluster) Write(key string, consistency ConsistencyLevel) (WriteClusterView, error) {
 	ret := m.Called(key, consistency)
 
-	var r0 []Backend
-	if rf, ok := ret.Get(0).(func(key string, consistency ConsistencyLevel) []Backend); ok {
+	var r0 WriteClusterView
+	if rf, ok := ret.Get(0).(func(key string, consistency ConsistencyLevel) WriteClusterView); ok {
 		r0 = rf(key, consistency)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]Backend)
+			r0 = ret.Get(0).(WriteClusterView)
 		}
 	}
 
-	return r0
-}
-
-func (m *Mock_Cluster) WriteAcknowledgeRequired(key string, consistency ConsistencyLevel) int {
-	ret := m.Called(key, consistency)
-
-	var r0 int
-	if rf, ok := ret.Get(0).(func(key string, consistency ConsistencyLevel) int); ok {
-		r0 = rf(key, consistency)
+	var r1 error
+	if rf, ok := ret.Get(1).(func(key string, consistency ConsistencyLevel) error); ok {
+		r1 = rf(key, consistency)
 	} else {
-		r0 = ret.Get(0).(int)
+		r1 = ret.Error(1)
 	}
 
-	return r0
+	return r0, r1
 }

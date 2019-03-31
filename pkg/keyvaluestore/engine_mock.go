@@ -20,7 +20,8 @@ func (m *Mock_Engine) Close() error {
 }
 
 func (m *Mock_Engine) Read(nodes []Backend, votesRequired int,
-	operator ReadOperator, repair RepairOperator, cmp ValueComparer, mode VotingMode) (interface{}, error) {
+	operator ReadOperator, repair RepairOperator,
+	cmp ValueComparer, mode VotingMode) (interface{}, error) {
 
 	ret := m.Called(nodes, votesRequired, operator, repair, cmp, mode)
 

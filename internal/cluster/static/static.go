@@ -1,9 +1,9 @@
 package static
 
 import (
-	"fmt"
 	"math/rand"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
@@ -34,67 +34,61 @@ func New(backends []keyvaluestore.Backend, options ...Option) keyvaluestore.Clus
 	return result
 }
 
-func (s staticCluster) WriteAcknowledgeRequired(key string, consistency keyvaluestore.ConsistencyLevel) int {
+func (s staticCluster) Read(key string,
+	consistency keyvaluestore.ConsistencyLevel) (keyvaluestore.ReadClusterView, error) {
+
 	switch consistency {
 	case keyvaluestore.ConsistencyLevel_ALL:
-		return len(s.allNodes())
+		allNodes := s.allNodes()
+		return keyvaluestore.ReadClusterView{
+			Backends:     allNodes,
+			VoteRequired: len(allNodes),
+		}, nil
 
 	case keyvaluestore.ConsistencyLevel_MAJORITY:
-		return s.majority(len(s.allNodes()))
+		allNodes := s.allNodes()
+		return keyvaluestore.ReadClusterView{
+			Backends:     allNodes,
+			VoteRequired: s.majority(len(allNodes)),
+		}, nil
 
 	case keyvaluestore.ConsistencyLevel_ONE:
-		return 1
+		return keyvaluestore.ReadClusterView{
+			Backends:     s.localNodeOrRandomNode(),
+			VoteRequired: 1,
+		}, nil
 
 	default:
-		panic(fmt.Sprintf("unknown consistency level: %v", consistency))
+		return keyvaluestore.ReadClusterView{}, errors.Errorf("unknown consistency level: %v", consistency)
 	}
 }
 
-func (s staticCluster) ReadVoteRequired(key string, consistency keyvaluestore.ConsistencyLevel) int {
+func (s staticCluster) Write(key string,
+	consistency keyvaluestore.ConsistencyLevel) (keyvaluestore.WriteClusterView, error) {
+
+	allNodes := s.allNodes()
+
 	switch consistency {
 	case keyvaluestore.ConsistencyLevel_ALL:
-		return len(s.allNodes())
+		return keyvaluestore.WriteClusterView{
+			Backends:            allNodes,
+			AcknowledgeRequired: len(allNodes),
+		}, nil
 
 	case keyvaluestore.ConsistencyLevel_MAJORITY:
-		return s.majority(len(s.allNodes()))
+		return keyvaluestore.WriteClusterView{
+			Backends:            allNodes,
+			AcknowledgeRequired: s.majority(len(allNodes)),
+		}, nil
 
 	case keyvaluestore.ConsistencyLevel_ONE:
-		return 1
+		return keyvaluestore.WriteClusterView{
+			Backends:            allNodes,
+			AcknowledgeRequired: 1,
+		}, nil
 
 	default:
-		panic(fmt.Sprintf("unknown consistency level: %v", consistency))
-	}
-}
-
-func (s staticCluster) ReadBackends(key string, consistency keyvaluestore.ConsistencyLevel) []keyvaluestore.Backend {
-	switch consistency {
-	case keyvaluestore.ConsistencyLevel_ALL:
-		return s.allNodes()
-
-	case keyvaluestore.ConsistencyLevel_MAJORITY:
-		return s.allNodes()
-
-	case keyvaluestore.ConsistencyLevel_ONE:
-		return s.allNodes()[:1]
-
-	default:
-		panic(fmt.Sprintf("unknown consistency level: %v", consistency))
-	}
-}
-
-func (s staticCluster) WriteBackends(key string, consistency keyvaluestore.ConsistencyLevel) []keyvaluestore.Backend {
-	switch consistency {
-	case keyvaluestore.ConsistencyLevel_ALL:
-		return s.allNodes()
-
-	case keyvaluestore.ConsistencyLevel_MAJORITY:
-		return s.allNodes()
-
-	case keyvaluestore.ConsistencyLevel_ONE:
-		return s.allNodes()
-
-	default:
-		panic(fmt.Sprintf("unknown consistency level: %v", consistency))
+		return keyvaluestore.WriteClusterView{}, errors.Errorf("unknown consistency level: %v", consistency)
 	}
 }
 

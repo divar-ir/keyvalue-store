@@ -209,17 +209,19 @@ func (s *coreService) performWrite(key string,
 	mode keyvaluestore.OperationMode) error {
 
 	consistency := s.writeConsistency(options)
-	nodes := s.cluster.WriteBackends(key, consistency)
-	acknowledgeCount := s.cluster.WriteAcknowledgeRequired(key, consistency)
+	view, err := s.cluster.Write(key, consistency)
+	if err != nil {
+		return err
+	}
 
 	// Use sequential (ordered)[deterministic order guarantee]
 	// write sequence to prevent dining philosopher problem
 	// (a.k.a chance of deadlock)
 	if mode == keyvaluestore.OperationModeSequential {
-		nodes = s.sortNodes(nodes)
+		view.Backends = s.sortNodes(view.Backends)
 	}
 
-	return s.engine.Write(nodes, acknowledgeCount, operator, rollback, mode)
+	return s.engine.Write(view.Backends, view.AcknowledgeRequired, operator, rollback, mode)
 }
 
 func (s *coreService) performRead(key string,
@@ -229,10 +231,12 @@ func (s *coreService) performRead(key string,
 	comparer keyvaluestore.ValueComparer) (interface{}, error) {
 
 	consistency := s.readConsistency(options)
-	nodes := s.cluster.ReadBackends(key, consistency)
-	votesRequired := s.cluster.ReadVoteRequired(key, consistency)
+	view, err := s.cluster.Read(key, consistency)
+	if err != nil {
+		return nil, err
+	}
 
-	return s.engine.Read(nodes, votesRequired, readOperator, repairOperator, comparer,
+	return s.engine.Read(view.Backends, view.VoteRequired, readOperator, repairOperator, comparer,
 		keyvaluestore.VotingModeVoteOnNotFound)
 }
 
