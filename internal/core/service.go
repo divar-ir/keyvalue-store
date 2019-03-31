@@ -105,7 +105,8 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 		}
 
 		majority := s.majority(len(args.Winners))
-		ttlValue, err := s.engine.Read(args.Winners, majority, ttlOperator, nil, s.durationComparer)
+		ttlValue, err := s.engine.Read(args.Winners, majority, ttlOperator, nil, s.durationComparer,
+			keyvaluestore.VotingModeVoteOnNotFound)
 		if err != nil {
 			return
 		}
@@ -231,7 +232,8 @@ func (s *coreService) performRead(key string,
 	nodes := s.cluster.ReadBackends(key, consistency)
 	votesRequired := s.cluster.ReadVoteRequired(key, consistency)
 
-	return s.engine.Read(nodes, votesRequired, readOperator, repairOperator, comparer)
+	return s.engine.Read(nodes, votesRequired, readOperator, repairOperator, comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 }
 
 func (s *coreService) sortNodes(nodes []keyvaluestore.Backend) []keyvaluestore.Backend {

@@ -20,20 +20,20 @@ func (m *Mock_Engine) Close() error {
 }
 
 func (m *Mock_Engine) Read(nodes []Backend, votesRequired int,
-	operator ReadOperator, repair RepairOperator, cmp ValueComparer) (interface{}, error) {
+	operator ReadOperator, repair RepairOperator, cmp ValueComparer, mode VotingMode) (interface{}, error) {
 
-	ret := m.Called(nodes, votesRequired, operator, repair, cmp)
+	ret := m.Called(nodes, votesRequired, operator, repair, cmp, mode)
 
 	var r0 interface{}
-	if rf, ok := ret.Get(0).(func(nodes []Backend, votesRequired int, operator ReadOperator, repair RepairOperator, cmp ValueComparer) interface{}); ok {
-		r0 = rf(nodes, votesRequired, operator, repair, cmp)
+	if rf, ok := ret.Get(0).(func(nodes []Backend, votesRequired int, operator ReadOperator, repair RepairOperator, cmp ValueComparer, mode VotingMode) interface{}); ok {
+		r0 = rf(nodes, votesRequired, operator, repair, cmp, mode)
 	} else {
 		r0 = ret.Get(0)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(nodes []Backend, votesRequired int, operator ReadOperator, repair RepairOperator, cmp ValueComparer) error); ok {
-		r1 = rf(nodes, votesRequired, operator, repair, cmp)
+	if rf, ok := ret.Get(1).(func(nodes []Backend, votesRequired int, operator ReadOperator, repair RepairOperator, cmp ValueComparer, mode VotingMode) error); ok {
+		r1 = rf(nodes, votesRequired, operator, repair, cmp, mode)
 	} else {
 		r1 = ret.Error(1)
 	}

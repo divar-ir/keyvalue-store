@@ -21,17 +21,26 @@ type RollbackArgs struct {
 }
 
 type OperationMode int
+type VotingMode int
 
 var (
 	OperationModeConcurrent OperationMode
 	OperationModeSequential OperationMode = 1
 )
 
+var (
+	VotingModeVoteOnNotFound     VotingMode
+	VotingModeSkipVoteOnNotFound VotingMode = 1
+)
+
 type Engine interface {
 	io.Closer
 
 	Read(nodes []Backend, votesRequired int,
-		operator ReadOperator, repair RepairOperator, cmp ValueComparer) (interface{}, error)
+		operator ReadOperator,
+		repair RepairOperator,
+		cmp ValueComparer,
+		mode VotingMode) (interface{}, error)
 
 	Write(nodes []Backend, acknowledgeRequired int,
 		operator WriteOperator,

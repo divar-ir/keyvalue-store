@@ -52,7 +52,8 @@ func (e *keyValueEngine) Read(nodes []keyvaluestore.Backend,
 	votesRequired int,
 	operator keyvaluestore.ReadOperator,
 	repair keyvaluestore.RepairOperator,
-	cmp keyvaluestore.ValueComparer) (interface{}, error) {
+	cmp keyvaluestore.ValueComparer,
+	mode keyvaluestore.VotingMode) (interface{}, error) {
 
 	e.operating.Add(1)
 	defer e.operating.Done()
@@ -65,7 +66,7 @@ func (e *keyValueEngine) Read(nodes []keyvaluestore.Backend,
 	resultChannel := make(chan asyncReadResult, len(nodes))
 
 	e.startReadOperatorOnMultipleNodes(nodes, operator, &wg, resultChannel)
-	voteChannel := e.startReadVote(&wg, resultChannel, cmp, votesRequired, repair)
+	voteChannel := e.startReadVote(&wg, resultChannel, cmp, votesRequired, repair, mode)
 
 	vote := <-voteChannel
 	return vote.value, vote.err
@@ -102,11 +103,12 @@ func (e *keyValueEngine) startReadVote(wg *sync.WaitGroup,
 	resultChannel chan asyncReadResult,
 	comparer keyvaluestore.ValueComparer,
 	requiredVotes int,
-	repair keyvaluestore.RepairOperator) chan asyncReadResult {
+	repair keyvaluestore.RepairOperator,
+	mode keyvaluestore.VotingMode) chan asyncReadResult {
 
 	ch := make(chan asyncReadResult, 1)
 	e.operating.Add(1)
-	go e.waitForReadVote(wg, resultChannel, comparer, requiredVotes, repair, ch)
+	go e.waitForReadVote(wg, resultChannel, comparer, requiredVotes, repair, mode, ch)
 
 	return ch
 }
@@ -180,6 +182,7 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 	cmp keyvaluestore.ValueComparer,
 	requiredVotes int,
 	repair keyvaluestore.RepairOperator,
+	mode keyvaluestore.VotingMode,
 	finalResultChannel chan asyncReadResult) {
 
 	defer e.operating.Done()
@@ -233,7 +236,16 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 				return
 			} else if result.err != nil {
 				if result.err == keyvaluestore.ErrNotFound {
-					if votes.Add(voteItem{notFound: true}, result.node, 1) >= requiredVotes && finalResultChannel != nil {
+					var weight int
+
+					switch mode {
+					case keyvaluestore.VotingModeSkipVoteOnNotFound:
+						weight = 0
+					default:
+						weight = 1
+					}
+
+					if votes.Add(voteItem{notFound: true}, result.node, weight) >= requiredVotes && finalResultChannel != nil {
 						finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrNotFound}
 						close(finalResultChannel)
 						finalResultChannel = nil

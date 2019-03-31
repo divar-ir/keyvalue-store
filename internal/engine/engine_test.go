@@ -143,7 +143,8 @@ func (s *EngineTestSuite) TestSequentialWriteShouldKeepNodePartialOrder() {
 }
 
 func (s *EngineTestSuite) TestReadShouldCallAllNodes() {
-	value, err := s.engine.Read(s.nodes, 3, s.readOperator, nil, s.comparer)
+	value, err := s.engine.Read(s.nodes, 3, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.wg.Wait()
@@ -153,7 +154,7 @@ func (s *EngineTestSuite) TestReadShouldCallAllNodes() {
 func (s *EngineTestSuite) TestReadShouldNotCallRepairIfAllNodesAggree() {
 	value, err := s.engine.Read(s.nodes, 3, s.readOperator, func(args keyvaluestore.RepairArgs) {
 		s.FailNow("repair should not have been called since all nodes agree")
-	}, s.comparer)
+	}, s.comparer, keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.assertAllCalled()
@@ -162,7 +163,8 @@ func (s *EngineTestSuite) TestReadShouldNotCallRepairIfAllNodesAggree() {
 
 func (s *EngineTestSuite) TestReadShouldNotWaitOnSlowNodesIfVotesAreSatisfied() {
 	s.setNodeSlow(0)
-	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
+	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.False(s.mark[0])
@@ -173,7 +175,8 @@ func (s *EngineTestSuite) TestReadShouldNotWaitOnSlowNodesIfVotesAreSatisfied() 
 
 func (s *EngineTestSuite) TestReadShouldNotReportErrorIfVotesAreSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
+	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.assertAllCalled()
@@ -181,7 +184,8 @@ func (s *EngineTestSuite) TestReadShouldNotReportErrorIfVotesAreSatisfied() {
 
 func (s *EngineTestSuite) TestReadShouldReportErrorIfVotesAreNotSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	_, err := s.engine.Read(s.nodes, 3, s.readOperator, nil, s.comparer)
+	_, err := s.engine.Read(s.nodes, 3, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.NotNil(err)
 	s.assertAllCalled()
 }
@@ -189,7 +193,8 @@ func (s *EngineTestSuite) TestReadShouldReportErrorIfVotesAreNotSatisfied() {
 func (s *EngineTestSuite) TestReadShouldReportNotFoundErrorIfVotesAggree() {
 	s.setNodeOnError(0, keyvaluestore.ErrNotFound)
 	s.setNodeOnError(1, keyvaluestore.ErrNotFound)
-	_, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
+	_, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.Equal(keyvaluestore.ErrNotFound, err)
 	s.wg.Wait()
 	s.assertAllCalled()
@@ -199,7 +204,7 @@ func (s *EngineTestSuite) TestReadShouldNotConsiderErrorfulBackendsInRepair() {
 	s.setNodeOnError(0, errors.New("some error"))
 	value, err := s.engine.Read(s.nodes, 2, s.readOperator, func(args keyvaluestore.RepairArgs) {
 		s.FailNow("unexpected method call, node 0 is faulty and should not trigger a repair action")
-	}, s.comparer)
+	}, s.comparer, keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.wg.Wait()
@@ -219,7 +224,7 @@ func (s *EngineTestSuite) TestReadShouldConsiderNotFoundErrorInRepair() {
 		s.Equal(2, len(args.Winners))
 		s.Equal(s.node1, args.Losers[0])
 		s.Subset(args.Winners, []keyvaluestore.Backend{s.node2, s.node3})
-	}, s.comparer)
+	}, s.comparer, keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.wg.Wait()
@@ -238,7 +243,7 @@ func (s *EngineTestSuite) TestReadShouldConsiderDifferenetValueInRepair() {
 		s.Equal(2, len(args.Winners))
 		s.Equal(s.node1, args.Losers[0])
 		s.Subset(args.Winners, []keyvaluestore.Backend{s.node2, s.node3})
-	}, s.comparer)
+	}, s.comparer, keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.wg.Wait()
@@ -257,7 +262,7 @@ func (s *EngineTestSuite) TestReadShouldRepairNodesWithValueIfMajorityReportNotF
 		s.Equal(2, len(args.Winners))
 		s.Equal(s.node2, args.Losers[0])
 		s.Subset(args.Winners, []keyvaluestore.Backend{s.node1, s.node2})
-	}, s.comparer)
+	}, s.comparer, keyvaluestore.VotingModeVoteOnNotFound)
 	s.Equal(keyvaluestore.ErrNotFound, err)
 	s.wg.Wait()
 	s.assertAllCalled()
@@ -275,9 +280,42 @@ func (s *EngineTestSuite) TestWriteShouldImmediatelyReturnIfAcknowledgeCountIsZe
 
 func (s *EngineTestSuite) TestReadShouldSkipRepairIfNilIsProvided() {
 	s.setNodeResult(0, RESULT+1)
-	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
+	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.Nil(err)
 	s.Equal(RESULT, value)
+	s.assertAllCalled()
+}
+
+func (s *EngineTestSuite) TestReadShouldReturnFirstDataOnVoteModeSkipNotFound() {
+	s.setNodeOnError(0, keyvaluestore.ErrNotFound)
+	s.setNodeResult(1, RESULT)
+	s.setNodeOnError(2, keyvaluestore.ErrNotFound)
+	value, err := s.engine.Read(s.nodes, 1, s.readOperator, nil, s.comparer,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.Nil(err)
+	s.Equal(RESULT, value)
+	s.wg.Wait()
+	s.assertAllCalled()
+}
+
+func (s *EngineTestSuite) TestReadShouldRepairOthersWithFirstDataOnVoteModeSkipNotFound() {
+	s.setNodeOnError(0, keyvaluestore.ErrNotFound)
+	s.setNodeResult(1, RESULT)
+	s.setNodeOnError(2, keyvaluestore.ErrNotFound)
+	s.wg.Add(1)
+	_, err := s.engine.Read(s.nodes, 1, s.readOperator, func(args keyvaluestore.RepairArgs) {
+		defer s.wg.Done()
+
+		s.Nil(args.Err)
+		s.Equal(RESULT, args.Value)
+		s.Equal(1, len(args.Winners))
+		s.Equal(2, len(args.Losers))
+		s.Subset(args.Winners, []keyvaluestore.Backend{s.node2})
+		s.Subset(args.Losers, []keyvaluestore.Backend{s.node1, s.node3})
+	}, s.comparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.Nil(err)
+	s.wg.Wait()
 	s.assertAllCalled()
 }
 

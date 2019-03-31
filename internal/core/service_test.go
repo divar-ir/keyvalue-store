@@ -124,7 +124,8 @@ func (s *CoreServiceTestSuite) TestGetShouldCallGetUponBackends() {
 	s.node1.On("Get", KEY).Once().Return(s.dataStr, nil)
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyReadToEngineOnce(s.dataStr, nil, nil, 1)
+	s.applyReadToEngineOnce(s.dataStr, nil, nil, 1,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	value, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
 		Options: keyvaluestore.ReadOptions{
@@ -138,7 +139,8 @@ func (s *CoreServiceTestSuite) TestGetShouldCallGetUponBackends() {
 func (s *CoreServiceTestSuite) TestGetShouldNotUseDefaultConsistencyLevelIfRequestProvidesIt() {
 	s.applyCore(core.WithDefaultReadConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
-	s.applyReadToEngineOnce(s.dataStr, nil, nil, 0)
+	s.applyReadToEngineOnce(s.dataStr, nil, nil, 0,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
 		Options: keyvaluestore.ReadOptions{
@@ -151,7 +153,8 @@ func (s *CoreServiceTestSuite) TestGetShouldNotUseDefaultConsistencyLevelIfReque
 func (s *CoreServiceTestSuite) TestGetShouldUseDefaultConsistencyLevelIfRequestDoesNotProvidesIt() {
 	s.applyCore(core.WithDefaultReadConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
-	s.applyReadToEngineOnce(s.dataStr, nil, nil, 0)
+	s.applyReadToEngineOnce(s.dataStr, nil, nil, 0,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
 	})
@@ -166,7 +169,7 @@ func (s *CoreServiceTestSuite) TestGetShouldRepairWithDeleteIfResultIsNotFound()
 	s.applyReadToEngineOnce(s.dataStr, keyvaluestore.ErrNotFound, &keyvaluestore.RepairArgs{
 		Err:    keyvaluestore.ErrNotFound,
 		Losers: []keyvaluestore.Backend{s.node1},
-	}, 0)
+	}, 0, keyvaluestore.VotingModeVoteOnNotFound)
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
 		Options: keyvaluestore.ReadOptions{
@@ -191,8 +194,9 @@ func (s *CoreServiceTestSuite) TestGetShouldForfeitRepairIfTTLHitsError() {
 	s.applyReadToEngineOnce(s.dataStr, nil, &keyvaluestore.RepairArgs{
 		Winners: []keyvaluestore.Backend{s.node1, s.node2, s.node3},
 		Value:   s.dataStr,
-	}, 3)
-	s.applyReadToEngineOnce(time.Duration(0), errors.New("some error"), nil, 2)
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(time.Duration(0), errors.New("some error"), nil, 2,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
 		Options: keyvaluestore.ReadOptions{
@@ -221,8 +225,9 @@ func (s *CoreServiceTestSuite) TestGetShouldAcquireTTLAndApplyToLosers() {
 		Losers:  []keyvaluestore.Backend{s.node3},
 		Winners: []keyvaluestore.Backend{s.node1, s.node2},
 		Value:   s.dataStr,
-	}, 3)
-	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 2)
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 2,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.applyWriteToEngineOnce(0)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
@@ -253,8 +258,9 @@ func (s *CoreServiceTestSuite) TestGetShouldNotApplyTTLDuringRepairIfItDoesNotEx
 		Losers:  []keyvaluestore.Backend{s.node3},
 		Winners: []keyvaluestore.Backend{s.node1, s.node2},
 		Value:   s.dataStr,
-	}, 3)
-	s.applyReadToEngineOnce(nil, nil, nil, 2)
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(nil, nil, nil, 2,
+		keyvaluestore.VotingModeVoteOnNotFound)
 	s.applyWriteToEngineOnce(0)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
@@ -283,8 +289,9 @@ func (s *CoreServiceTestSuite) TestGetShouldForfeitRepairIfTTLIsZero() {
 		Losers:  []keyvaluestore.Backend{s.node3},
 		Winners: []keyvaluestore.Backend{s.node1, s.node2},
 		Value:   s.dataStr,
-	}, 3)
-	s.applyReadToEngineOnce(&ZERO_MINUTE, nil, nil, 2)
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ZERO_MINUTE, nil, nil, 2,
+		keyvaluestore.VotingModeVoteOnNotFound)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
@@ -453,9 +460,10 @@ func (s *CoreServiceTestSuite) applyWriteToEngineOnce(nodeCount int, options ...
 }
 
 func (s *CoreServiceTestSuite) applyReadToEngineOnce(result interface{}, err error,
-	repairArgs *keyvaluestore.RepairArgs, nodeCount int) {
+	repairArgs *keyvaluestore.RepairArgs, nodeCount int,
+	mode keyvaluestore.VotingMode) {
 
-	s.engine.On("Read", mock.Anything, nodeCount, mock.Anything, mock.Anything, mock.Anything).Once().
+	s.engine.On("Read", mock.Anything, nodeCount, mock.Anything, mock.Anything, mock.Anything, mode).Once().
 		Run(func(args mock.Arguments) {
 			backends := args.Get(0).([]keyvaluestore.Backend)
 			readOperator := args.Get(2).(keyvaluestore.ReadOperator)
