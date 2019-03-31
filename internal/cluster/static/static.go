@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	defaultReadOnePolicy keyvaluestore.Policy = keyvaluestore.PolicyReadOneLocalOrRandomNode
+	defaultReadOnePolicy = keyvaluestore.PolicyReadOneLocalOrRandomNode
 )
 
 type staticCluster struct {

@@ -62,7 +62,7 @@ func (s *RedisBackendTestSuite) TestGetShouldReturnNotFoundIfKeyDoesNotExist() {
 }
 
 func (s *RedisBackendTestSuite) TestGetShouldReturnValueIfKeyExists() {
-	s.db.Set(KEY, VALUE)
+	s.Nil(s.db.Set(KEY, VALUE))
 	result, err := s.backend.Get(KEY)
 	s.Nil(err)
 	s.Equal(VALUE, string(result))

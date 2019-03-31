@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	KEY         = "mykey"
-	ANOTHER_KEY = "yet-another-key"
-	VALUE       = "Hello, World!"
+	Key        = "mykey"
+	AnotherKey = "yet-another-key"
+	VALUE      = "Hello, World!"
 )
 
 var (
@@ -49,15 +49,15 @@ func (s *RedisTransportTestSuite) TestSetShouldProvideDataAsBinary() {
 	core.On("Set", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.SetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 		s.Equal(VALUE, string(request.Data))
 
-		return KEY == request.Key && VALUE == string(request.Data)
+		return Key == request.Key && VALUE == string(request.Data)
 	})).Return(nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	s.Nil(client.Set(KEY, VALUE, 0).Err())
+	s.Nil(client.Set(Key, VALUE, 0).Err())
 	wg.Wait()
 }
 
@@ -69,15 +69,15 @@ func (s *RedisTransportTestSuite) TestSetShouldProvideConsistency() {
 	core.On("Set", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.SetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 		s.Equal(CONSISTENCY, request.Options.Consistency)
 
-		return KEY == request.Key && CONSISTENCY == request.Options.Consistency
+		return Key == request.Key && CONSISTENCY == request.Options.Consistency
 	})).Return(nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	s.Nil(client.Set(KEY, VALUE, 0).Err())
+	s.Nil(client.Set(Key, VALUE, 0).Err())
 	wg.Wait()
 }
 
@@ -89,15 +89,15 @@ func (s *RedisTransportTestSuite) TestSetShouldProvideExpiration() {
 	core.On("Set", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.SetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 		s.Equal(1*time.Minute, request.Expiration)
 
-		return KEY == request.Key && (1*time.Minute) == request.Expiration
+		return Key == request.Key && (1*time.Minute) == request.Expiration
 	})).Return(nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	s.Nil(client.Set(KEY, VALUE, 1*time.Minute).Err())
+	s.Nil(client.Set(Key, VALUE, 1*time.Minute).Err())
 	wg.Wait()
 }
 
@@ -109,15 +109,15 @@ func (s *RedisTransportTestSuite) TestSetShouldProvideNilExpirationIfZero() {
 	core.On("Set", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.SetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 		s.Zero(request.Expiration)
 
-		return KEY == request.Key && 0 == request.Expiration
+		return Key == request.Key && 0 == request.Expiration
 	})).Return(nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	s.Nil(client.Set(KEY, VALUE, 0).Err())
+	s.Nil(client.Set(Key, VALUE, 0).Err())
 	wg.Wait()
 }
 
@@ -133,7 +133,7 @@ func (s *RedisTransportTestSuite) TestSetShouldReturnErrorFromEndpoint() {
 
 	s.runServer(core)
 	client := s.makeClient()
-	s.NotNil(client.Set(KEY, VALUE, 0).Err())
+	s.NotNil(client.Set(Key, VALUE, 0).Err())
 	wg.Wait()
 }
 
@@ -145,15 +145,15 @@ func (s *RedisTransportTestSuite) TestDeleteShouldProvideConsistency() {
 	core.On("Delete", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.DeleteRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 		s.Equal(CONSISTENCY, request.Options.Consistency)
 
-		return KEY == request.Key && CONSISTENCY == request.Options.Consistency
+		return Key == request.Key && CONSISTENCY == request.Options.Consistency
 	})).Return(nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	result, err := client.Del(KEY).Result()
+	result, err := client.Del(Key).Result()
 	s.Nil(err)
 	s.Equal(1, int(result))
 	wg.Wait()
@@ -176,13 +176,13 @@ func (s *RedisTransportTestSuite) TestDeleteShouldSupportMultipleKeys() {
 
 	s.runServer(core)
 	client := s.makeClient()
-	result, err := client.Del(KEY, ANOTHER_KEY).Result()
+	result, err := client.Del(Key, AnotherKey).Result()
 	s.Nil(err)
 	s.Equal(2, int(result))
 	wg.Wait()
 	s.Equal(2, len(seenKeys))
-	s.True(seenKeys[KEY])
-	s.True(seenKeys[ANOTHER_KEY])
+	s.True(seenKeys[Key])
+	s.True(seenKeys[AnotherKey])
 }
 
 func (s *RedisTransportTestSuite) TestDeleteShouldProcessEndpointError() {
@@ -193,13 +193,13 @@ func (s *RedisTransportTestSuite) TestDeleteShouldProcessEndpointError() {
 	core.On("Delete", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.DeleteRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
-		return KEY == request.Key
+		s.Equal(Key, request.Key)
+		return Key == request.Key
 	})).Return(errors.New("some error"))
 
 	s.runServer(core)
 	client := s.makeClient()
-	_, err := client.Del(KEY).Result()
+	_, err := client.Del(Key).Result()
 	s.NotNil(err)
 	wg.Wait()
 }
@@ -212,14 +212,14 @@ func (s *RedisTransportTestSuite) TestGetShouldBeAbleToReturnNotFoundError() {
 	core.On("Get", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.GetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 
-		return KEY == request.Key
+		return Key == request.Key
 	})).Return(nil, status.Error(codes.NotFound, ""))
 
 	s.runServer(core)
 	client := s.makeClient()
-	_, err := client.Get(KEY).Bytes()
+	_, err := client.Get(Key).Bytes()
 	s.Equal(err, redisClient.Nil)
 	wg.Wait()
 }
@@ -232,18 +232,18 @@ func (s *RedisTransportTestSuite) TestGetShouldBeAbleToReturnBinaryData() {
 	core.On("Get", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.GetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 
-		return KEY == request.Key
+		return Key == request.Key
 	})).Return(&keyvaluestore.GetResponse{
 		Data: []byte(VALUE),
 	}, nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	response, err := client.Get(KEY).Result()
+	response, err := client.Get(Key).Result()
 	s.Nil(err)
-	s.Equal(VALUE, string(response))
+	s.Equal(VALUE, response)
 	wg.Wait()
 }
 
@@ -255,17 +255,17 @@ func (s *RedisTransportTestSuite) TestGetShouldProvideConsistency() {
 	core.On("Get", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.GetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
+		s.Equal(Key, request.Key)
 		s.Equal(CONSISTENCY, request.Options.Consistency)
 
-		return KEY == request.Key && CONSISTENCY == request.Options.Consistency
+		return Key == request.Key && CONSISTENCY == request.Options.Consistency
 	})).Return(&keyvaluestore.GetResponse{
 		Data: []byte(VALUE),
 	}, nil)
 
 	s.runServer(core)
 	client := s.makeClient()
-	_, err := client.Get(KEY).Result()
+	_, err := client.Get(Key).Result()
 	s.Nil(err)
 	wg.Wait()
 }
@@ -278,13 +278,13 @@ func (s *RedisTransportTestSuite) TestGetShouldReturnEndpointError() {
 	core.On("Get", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.GetRequest) bool {
 		defer wg.Done()
 
-		s.Equal(KEY, request.Key)
-		return KEY == request.Key
+		s.Equal(Key, request.Key)
+		return Key == request.Key
 	})).Return(nil, errors.New("some error"))
 
 	s.runServer(core)
 	client := s.makeClient()
-	_, err := client.Get(KEY).Result()
+	_, err := client.Get(Key).Result()
 	s.NotNil(err)
 	wg.Wait()
 }
@@ -322,7 +322,7 @@ func (s *RedisTransportTestSuite) TestShouldSupportSetIfNotSetViaLocking() {
 
 	s.runServer(core)
 	client := s.makeClient()
-	ok, err := client.SetNX(KEY, VALUE, 0).Result()
+	ok, err := client.SetNX(Key, VALUE, 0).Result()
 	s.Nil(err)
 	s.True(ok)
 	wg.Wait()
@@ -341,7 +341,7 @@ func (s *RedisTransportTestSuite) TestShouldConsiderDeadlockAsSetNXZeroResult() 
 
 	s.runServer(core)
 	client := s.makeClient()
-	ok, err := client.SetNX(KEY, VALUE, 0).Result()
+	ok, err := client.SetNX(Key, VALUE, 0).Result()
 	s.Nil(err)
 	s.False(ok)
 	wg.Wait()

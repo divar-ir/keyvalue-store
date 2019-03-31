@@ -310,9 +310,9 @@ func (s *CoreServiceTestSuite) TestGetShouldUseVotingModeFromClusterView() {
 
 	s.applyCore()
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL,
-		s.WithVotingMode(keyvaluestore.VotingModeVoteOnNotFound))
+		s.withVotingMode(keyvaluestore.VotingModeSkipVoteOnNotFound))
 	s.applyReadToEngineOnce(s.dataStr, nil, nil, 1,
-		keyvaluestore.VotingModeVoteOnNotFound)
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
@@ -534,7 +534,7 @@ func (s *CoreServiceTestSuite) applyCluster(
 	s.cluster.On("Write", KEY, consistency).Return(optionContext.writeView, nil)
 }
 
-func (s *CoreServiceTestSuite) WithVotingMode(mode keyvaluestore.VotingMode) clusterOption {
+func (s *CoreServiceTestSuite) withVotingMode(mode keyvaluestore.VotingMode) clusterOption {
 	return func(o *clusterOptionContext) {
 		o.readView.VotingMode = mode
 	}
