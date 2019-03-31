@@ -34,7 +34,6 @@ type EngineTestSuite struct {
 	engine               keyvaluestore.Engine
 	writeOperator        keyvaluestore.WriteOperator
 	readOperator         keyvaluestore.ReadOperator
-	emptyRepairOperator  keyvaluestore.RepairOperator
 	comparer             keyvaluestore.ValueComparer
 	wg                   sync.WaitGroup
 }
@@ -144,9 +143,10 @@ func (s *EngineTestSuite) TestSequentialWriteShouldKeepNodePartialOrder() {
 }
 
 func (s *EngineTestSuite) TestReadShouldCallAllNodes() {
-	value, err := s.engine.Read(s.nodes, 3, s.readOperator, s.emptyRepairOperator, s.comparer)
+	value, err := s.engine.Read(s.nodes, 3, s.readOperator, nil, s.comparer)
 	s.Nil(err)
 	s.Equal(RESULT, value)
+	s.wg.Wait()
 	s.assertAllCalled()
 }
 
@@ -157,11 +157,12 @@ func (s *EngineTestSuite) TestReadShouldNotCallRepairIfAllNodesAggree() {
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.assertAllCalled()
+	time.Sleep(50 * time.Millisecond)
 }
 
 func (s *EngineTestSuite) TestReadShouldNotWaitOnSlowNodesIfVotesAreSatisfied() {
 	s.setNodeSlow(0)
-	value, err := s.engine.Read(s.nodes, 2, s.readOperator, s.emptyRepairOperator, s.comparer)
+	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.False(s.mark[0])
@@ -172,7 +173,7 @@ func (s *EngineTestSuite) TestReadShouldNotWaitOnSlowNodesIfVotesAreSatisfied() 
 
 func (s *EngineTestSuite) TestReadShouldNotReportErrorIfVotesAreSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	value, err := s.engine.Read(s.nodes, 2, s.readOperator, s.emptyRepairOperator, s.comparer)
+	value, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
 	s.Nil(err)
 	s.Equal(RESULT, value)
 	s.assertAllCalled()
@@ -180,7 +181,7 @@ func (s *EngineTestSuite) TestReadShouldNotReportErrorIfVotesAreSatisfied() {
 
 func (s *EngineTestSuite) TestReadShouldReportErrorIfVotesAreNotSatisfied() {
 	s.setNodeOnError(0, errors.New("some error"))
-	_, err := s.engine.Read(s.nodes, 3, s.readOperator, s.emptyRepairOperator, s.comparer)
+	_, err := s.engine.Read(s.nodes, 3, s.readOperator, nil, s.comparer)
 	s.NotNil(err)
 	s.assertAllCalled()
 }
@@ -188,7 +189,7 @@ func (s *EngineTestSuite) TestReadShouldReportErrorIfVotesAreNotSatisfied() {
 func (s *EngineTestSuite) TestReadShouldReportNotFoundErrorIfVotesAggree() {
 	s.setNodeOnError(0, keyvaluestore.ErrNotFound)
 	s.setNodeOnError(1, keyvaluestore.ErrNotFound)
-	_, err := s.engine.Read(s.nodes, 2, s.readOperator, s.emptyRepairOperator, s.comparer)
+	_, err := s.engine.Read(s.nodes, 2, s.readOperator, nil, s.comparer)
 	s.Equal(keyvaluestore.ErrNotFound, err)
 	s.wg.Wait()
 	s.assertAllCalled()
@@ -203,6 +204,7 @@ func (s *EngineTestSuite) TestReadShouldNotConsiderErrorfulBackendsInRepair() {
 	s.Equal(RESULT, value)
 	s.wg.Wait()
 	s.assertAllCalled()
+	time.Sleep(50 * time.Millisecond)
 }
 
 func (s *EngineTestSuite) TestReadShouldConsiderNotFoundErrorInRepair() {
@@ -372,8 +374,6 @@ func (s *EngineTestSuite) SetupTest() {
 	s.comparer = func(x, y interface{}) bool {
 		return x.(int) == y.(int)
 	}
-
-	s.emptyRepairOperator = func(args keyvaluestore.RepairArgs) {}
 }
 
 func (s *EngineTestSuite) TearDownTest() {
