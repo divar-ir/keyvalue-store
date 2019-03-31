@@ -9,9 +9,14 @@ import (
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
 )
 
+var (
+	defaultReadOnePolicy keyvaluestore.Policy = keyvaluestore.PolicyReadOneLocalOrRandomNode
+)
+
 type staticCluster struct {
-	local    keyvaluestore.Backend
-	backends []keyvaluestore.Backend
+	local         keyvaluestore.Backend
+	backends      []keyvaluestore.Backend
+	readOnePolicy keyvaluestore.Policy
 }
 
 type Option func(s *staticCluster)
@@ -22,9 +27,25 @@ func WithLocal(local keyvaluestore.Backend) Option {
 	}
 }
 
+func WithPolicy(policy keyvaluestore.Policy) Option {
+	return func(s *staticCluster) {
+		switch policy {
+		case keyvaluestore.PolicyReadOneFirstAvailable:
+			s.readOnePolicy = policy
+
+		case keyvaluestore.PolicyReadOneLocalOrRandomNode:
+			s.readOnePolicy = policy
+
+		default:
+			logrus.WithField("policy", policy).Panic("unknown cluster policy")
+		}
+	}
+}
+
 func New(backends []keyvaluestore.Backend, options ...Option) keyvaluestore.Cluster {
 	result := staticCluster{
-		backends: backends,
+		backends:      backends,
+		readOnePolicy: defaultReadOnePolicy,
 	}
 
 	for _, option := range options {
@@ -37,13 +58,18 @@ func New(backends []keyvaluestore.Backend, options ...Option) keyvaluestore.Clus
 func (s staticCluster) Read(key string,
 	consistency keyvaluestore.ConsistencyLevel) (keyvaluestore.ReadClusterView, error) {
 
+	votingMode, err := s.readVotingMode(consistency)
+	if err != nil {
+		return keyvaluestore.ReadClusterView{}, err
+	}
+
 	switch consistency {
 	case keyvaluestore.ConsistencyLevel_ALL:
 		allNodes := s.allNodes()
 		return keyvaluestore.ReadClusterView{
 			Backends:     allNodes,
 			VoteRequired: len(allNodes),
-			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
+			VotingMode:   votingMode,
 		}, nil
 
 	case keyvaluestore.ConsistencyLevel_MAJORITY:
@@ -51,18 +77,45 @@ func (s staticCluster) Read(key string,
 		return keyvaluestore.ReadClusterView{
 			Backends:     allNodes,
 			VoteRequired: s.majority(len(allNodes)),
-			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
+			VotingMode:   votingMode,
 		}, nil
 
 	case keyvaluestore.ConsistencyLevel_ONE:
 		return keyvaluestore.ReadClusterView{
 			Backends:     s.localNodeOrRandomNode(),
 			VoteRequired: 1,
-			VotingMode:   keyvaluestore.VotingModeVoteOnNotFound,
+			VotingMode:   votingMode,
 		}, nil
 
 	default:
 		return keyvaluestore.ReadClusterView{}, errors.Errorf("unknown consistency level: %v", consistency)
+	}
+}
+
+func (s staticCluster) readVotingMode(
+	consistency keyvaluestore.ConsistencyLevel) (keyvaluestore.VotingMode, error) {
+
+	switch consistency {
+	case keyvaluestore.ConsistencyLevel_ALL:
+		return keyvaluestore.VotingModeVoteOnNotFound, nil
+
+	case keyvaluestore.ConsistencyLevel_MAJORITY:
+		return keyvaluestore.VotingModeVoteOnNotFound, nil
+
+	case keyvaluestore.ConsistencyLevel_ONE:
+		switch s.readOnePolicy {
+		case keyvaluestore.PolicyReadOneLocalOrRandomNode:
+			return keyvaluestore.VotingModeVoteOnNotFound, nil
+
+		case keyvaluestore.PolicyReadOneFirstAvailable:
+			return keyvaluestore.VotingModeSkipVoteOnNotFound, nil
+
+		default:
+			return 0, errors.Errorf("unknown readone policy: %v", s.readOnePolicy)
+		}
+
+	default:
+		return 0, errors.Errorf("unknown consistency level: %v", consistency)
 	}
 }
 

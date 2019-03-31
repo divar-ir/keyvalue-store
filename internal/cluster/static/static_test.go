@@ -154,6 +154,80 @@ func (s *StaticClusterTestSuite) TestReadBackendsShouldConsiderLocalConnection()
 	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.local})
 }
 
+func (s *StaticClusterTestSuite) TestReadOneFirstAvailablePolicyShouldLeaveConsistencyAllUnChanged() {
+	defaultView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	policyView, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneFirstAvailable)).Read(
+		"", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(defaultView.VotingMode, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneLocalOrRandomNodePolicyShouldLeaveConsistencyAllUnChanged() {
+	defaultView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	policyView, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneLocalOrRandomNode)).Read(
+		"", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(defaultView.VotingMode, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneFirstAvailablePolicyShouldLeaveConsistencyMajorityUnChanged() {
+	defaultView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	policyView, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneFirstAvailable)).Read(
+		"", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(defaultView.VotingMode, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneLocalOrRandomNodePolicyShouldLeaveConsistencyMajorityUnChanged() {
+	defaultView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	policyView, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneLocalOrRandomNode)).Read(
+		"", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(defaultView.VotingMode, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneFirstAvailablePolicyShouldApplyToConsistencyOne() {
+	policyView, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneFirstAvailable)).Read(
+		"", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(keyvaluestore.VotingModeSkipVoteOnNotFound, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneLocalOrRandomNodePolicyShouldApplyToConsistencyOne() {
+	policyView, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneLocalOrRandomNode)).Read(
+		"", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(keyvaluestore.VotingModeVoteOnNotFound, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneConsistencyAllShouldHaveDefaultVotingMode() {
+	policyView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ALL)
+	s.Nil(err)
+	s.Equal(keyvaluestore.VotingModeVoteOnNotFound, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneConsistencyMajorityShouldHaveDefaultVotingMode() {
+	policyView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.Nil(err)
+	s.Equal(keyvaluestore.VotingModeVoteOnNotFound, policyView.VotingMode)
+}
+
+func (s *StaticClusterTestSuite) TestReadOneConsistencyOneShouldHaveDefaultVotingMode() {
+	policyView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(keyvaluestore.VotingModeVoteOnNotFound, policyView.VotingMode)
+}
+
 func (s *StaticClusterTestSuite) TestReadBackendsShouldRandomizeNodes() {
 	b := s.makeCluster(3, false)
 	firstView, err := b.Read("", keyvaluestore.ConsistencyLevel_ALL)
@@ -195,12 +269,16 @@ func (s *StaticClusterTestSuite) TestCloseShouldCloseLocalConnectionIfProvided()
 	node.AssertExpectations(s.T())
 }
 
-func (s *StaticClusterTestSuite) makeCluster(nodes int, local bool) keyvaluestore.Cluster {
+func (s *StaticClusterTestSuite) makeCluster(nodes int, local bool,
+	clusterOptions ...static.Option) keyvaluestore.Cluster {
+
 	var options []static.Option
 
 	if local {
 		options = append(options, static.WithLocal(s.local))
 	}
+
+	options = append(options, clusterOptions...)
 
 	all := []keyvaluestore.Backend{
 		s.node1,

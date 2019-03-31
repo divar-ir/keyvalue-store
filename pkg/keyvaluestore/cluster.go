@@ -4,6 +4,13 @@ import (
 	"io"
 )
 
+type Policy int
+
+var (
+	PolicyReadOneLocalOrRandomNode Policy
+	PolicyReadOneFirstAvailable    Policy = 1
+)
+
 type Cluster interface {
 	io.Closer
 
