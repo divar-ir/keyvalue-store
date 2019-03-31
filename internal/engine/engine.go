@@ -233,7 +233,7 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 				return
 			} else if result.err != nil {
 				if result.err == keyvaluestore.ErrNotFound {
-					if votes.Add(voteItem{notFound: true}, result.node) >= requiredVotes && finalResultChannel != nil {
+					if votes.Add(voteItem{notFound: true}, result.node, 1) >= requiredVotes && finalResultChannel != nil {
 						finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrNotFound}
 						close(finalResultChannel)
 						finalResultChannel = nil
@@ -246,7 +246,7 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 					lastErr = result.err
 				}
 			} else {
-				if votes.Add(voteItem{value: result.value}, result.node) >= requiredVotes && finalResultChannel != nil {
+				if votes.Add(voteItem{value: result.value}, result.node, 1) >= requiredVotes && finalResultChannel != nil {
 					finalResultChannel <- asyncReadResult{value: result.value}
 					close(finalResultChannel)
 					finalResultChannel = nil

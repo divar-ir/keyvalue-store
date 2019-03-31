@@ -19,10 +19,10 @@ func New(comparer keyvaluestore.ValueComparer) keyvaluestore.Voting {
 	return &voting{comparer: comparer}
 }
 
-func (v *voting) Add(value interface{}, data interface{}) int {
+func (v *voting) Add(value interface{}, data interface{}, weight int) int {
 	for _, item := range v.items {
 		if v.comparer(value, item.value) {
-			item.vote = item.vote + 1
+			item.vote = item.vote + weight
 			item.data = append(item.data, data)
 			return item.vote
 		}
@@ -30,11 +30,11 @@ func (v *voting) Add(value interface{}, data interface{}) int {
 
 	v.items = append(v.items, &voteItem{
 		value: value,
-		vote:  1,
+		vote:  weight,
 		data:  []interface{}{data},
 	})
 
-	return 1
+	return weight
 }
 
 func (v *voting) Empty() bool {
