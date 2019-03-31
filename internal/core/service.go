@@ -104,9 +104,8 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 			return
 		}
 
-		majority := s.majority(len(args.Winners))
-		ttlValue, err := s.engine.Read(args.Winners, majority, ttlOperator, nil, s.durationComparer,
-			keyvaluestore.VotingModeVoteOnNotFound)
+		ttlValue, err := s.engine.Read(args.Winners, 1, ttlOperator, nil, s.durationComparer,
+			keyvaluestore.VotingModeSkipVoteOnNotFound)
 		if err != nil {
 			return
 		}
@@ -293,10 +292,6 @@ func (s *coreService) durationComparer(x, y interface{}) bool {
 	}
 
 	return *(x.(*time.Duration)) == *(y.(*time.Duration))
-}
-
-func (s *coreService) majority(count int) int {
-	return (count / 2) + 1
 }
 
 func (s *coreService) convertErrorToGRPC(err error) error {

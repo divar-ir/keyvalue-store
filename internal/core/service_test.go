@@ -195,8 +195,8 @@ func (s *CoreServiceTestSuite) TestGetShouldForfeitRepairIfTTLHitsError() {
 		Winners: []keyvaluestore.Backend{s.node1, s.node2, s.node3},
 		Value:   s.dataStr,
 	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
-	s.applyReadToEngineOnce(time.Duration(0), errors.New("some error"), nil, 2,
-		keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(time.Duration(0), errors.New("some error"), nil, 1,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
 		Options: keyvaluestore.ReadOptions{
@@ -226,8 +226,8 @@ func (s *CoreServiceTestSuite) TestGetShouldAcquireTTLAndApplyToLosers() {
 		Winners: []keyvaluestore.Backend{s.node1, s.node2},
 		Value:   s.dataStr,
 	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
-	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 2,
-		keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 1,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
 	s.applyWriteToEngineOnce(0)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
@@ -259,8 +259,8 @@ func (s *CoreServiceTestSuite) TestGetShouldNotApplyTTLDuringRepairIfItDoesNotEx
 		Winners: []keyvaluestore.Backend{s.node1, s.node2},
 		Value:   s.dataStr,
 	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
-	s.applyReadToEngineOnce(nil, nil, nil, 2,
-		keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(nil, nil, nil, 1,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
 	s.applyWriteToEngineOnce(0)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
@@ -290,8 +290,8 @@ func (s *CoreServiceTestSuite) TestGetShouldForfeitRepairIfTTLIsZero() {
 		Winners: []keyvaluestore.Backend{s.node1, s.node2},
 		Value:   s.dataStr,
 	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
-	s.applyReadToEngineOnce(&ZERO_MINUTE, nil, nil, 2,
-		keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ZERO_MINUTE, nil, nil, 1,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
 
 	_, err := s.core.Get(context.Background(), &keyvaluestore.GetRequest{
 		Key: KEY,
