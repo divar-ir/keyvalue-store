@@ -1,7 +1,6 @@
 package keyvaluestore
 
 import (
-	"context"
 	"time"
 
 	"github.com/stretchr/testify/mock"
@@ -109,12 +108,12 @@ func (m *Mock_Backend) Address() string {
 	return r0
 }
 
-func (m *Mock_Backend) Lock(ctx context.Context, key string, expiration time.Duration) error {
-	ret := m.Called(ctx, key, expiration)
+func (m *Mock_Backend) Lock(key string, expiration time.Duration) error {
+	ret := m.Called(key, expiration)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(ctx context.Context, key string, expiration time.Duration) error); ok {
-		r0 = rf(ctx, key, expiration)
+	if rf, ok := ret.Get(0).(func(key string, expiration time.Duration) error); ok {
+		r0 = rf(key, expiration)
 	} else {
 		r0 = ret.Error(0)
 	}
