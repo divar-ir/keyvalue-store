@@ -239,7 +239,7 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 			Key:        key,
 			Expiration: expiration,
 			Options: keyvaluestore.WriteOptions{
-				Consistency: s.writeConsistency,
+				Consistency: keyvaluestore.ConsistencyLevel_MAJORITY,
 			},
 		}
 
@@ -328,7 +328,7 @@ func (s *redisServer) handleSetNXCommand(command *redisproto.Command, writer *re
 	request := &keyvaluestore.LockRequest{
 		Key: key,
 		Options: keyvaluestore.WriteOptions{
-			Consistency: s.writeConsistency,
+			Consistency: keyvaluestore.ConsistencyLevel_MAJORITY,
 		},
 	}
 
