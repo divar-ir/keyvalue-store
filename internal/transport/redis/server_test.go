@@ -328,7 +328,7 @@ func (s *RedisTransportTestSuite) TestShouldSupportSetIfNotSetViaLocking() {
 	wg.Wait()
 }
 
-func (s *RedisTransportTestSuite) TestShouldConsiderDeadlockAsSetNXZeroResult() {
+func (s *RedisTransportTestSuite) TestShouldConsiderUnavailableAsSetNXZeroResult() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -337,7 +337,7 @@ func (s *RedisTransportTestSuite) TestShouldConsiderDeadlockAsSetNXZeroResult() 
 		defer wg.Done()
 
 		return true
-	})).Return(status.Error(codes.DeadlineExceeded, "deadline exceeded"))
+	})).Once().Return(status.Error(codes.Unavailable, "consistency error"))
 
 	s.runServer(core)
 	client := s.makeClient()

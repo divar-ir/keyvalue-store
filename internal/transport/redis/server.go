@@ -337,12 +337,8 @@ func (s *redisServer) handleSetNXCommand(command *redisproto.Command, writer *re
 
 	err := s.core.Lock(ctx, request)
 	if err != nil {
-		if err == context.DeadlineExceeded {
-			return writer.WriteInt(0)
-		}
-
 		grpcStatus, ok := status.FromError(err)
-		if ok && grpcStatus.Code() == codes.DeadlineExceeded {
+		if ok && grpcStatus.Code() == codes.Unavailable {
 			return writer.WriteInt(0)
 		}
 
