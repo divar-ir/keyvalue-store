@@ -148,6 +148,9 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "SETNX":
 		err = s.handleSetNXCommand(command, writer)
 
+	case "SETEX":
+		err = s.handleSetEXCommand(command, writer)
+
 	default:
 		logrus.WithField("cmd", cmd).Error("command not supported")
 
@@ -247,6 +250,36 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 		if err != nil {
 			return wrapError(err)
 		}
+	}
+
+	return writer.WriteBulkString("OK")
+}
+
+func (s *redisServer) handleSetEXCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() < 4 {
+		return wrapStringAsError("expected at least 4 arguments for SETEX command")
+	}
+
+	key := string(command.Get(1))
+	expirationTime, err := strconv.Atoi(string(command.Get(2)))
+	if err != nil {
+		return wrapError(err)
+	}
+	expiration := time.Duration(expirationTime) * time.Second
+	value := command.Get(3)
+
+	request := &keyvaluestore.SetRequest{
+		Key:        key,
+		Data:       value,
+		Expiration: expiration,
+		Options: keyvaluestore.WriteOptions{
+			Consistency: s.writeConsistency,
+		},
+	}
+
+	err = s.core.Set(context.Background(), request)
+	if err != nil {
+		return wrapError(err)
 	}
 
 	return writer.WriteBulkString("OK")
