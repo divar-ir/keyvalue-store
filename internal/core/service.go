@@ -303,6 +303,9 @@ func (s *coreService) convertErrorToGRPC(err error) error {
 	case keyvaluestore.ErrNotFound:
 		return status.Error(codes.NotFound, keyvaluestore.ErrNotFound.Error())
 
+	case keyvaluestore.ErrConsistency:
+		return status.Error(codes.Unavailable, keyvaluestore.ErrConsistency.Error())
+
 	case context.Canceled:
 		return status.Error(codes.Canceled, context.Canceled.Error())
 
