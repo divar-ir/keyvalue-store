@@ -133,3 +133,23 @@ func (m *Mock_Backend) Unlock(key string) error {
 
 	return r0
 }
+
+func (m *Mock_Backend) Exists(key string) (bool, error) {
+	ret := m.Called(key)
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func(key string) bool); ok {
+		r0 = rf(key)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(key string) error); ok {
+		r1 = rf(key)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}

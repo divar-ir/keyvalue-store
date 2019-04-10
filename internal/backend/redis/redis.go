@@ -76,6 +76,19 @@ func (r *redisBackend) TTL(key string) (*time.Duration, error) {
 	return &result, nil
 }
 
+func (r *redisBackend) Exists(key string) (bool, error) {
+	if r.client == nil {
+		return false, keyvaluestore.ErrClosed
+	}
+
+	result, err := r.client.Exists(key).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return result > 0, nil
+}
+
 func (r *redisBackend) Get(key string) ([]byte, error) {
 	if r.client == nil {
 		return nil, keyvaluestore.ErrClosed

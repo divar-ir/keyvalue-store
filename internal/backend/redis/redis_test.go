@@ -137,6 +137,19 @@ func (s *RedisBackendTestSuite) TestAfterUnlockShouldBeLockable() {
 	s.Nil(s.backend.Lock(KEY, 1*time.Second))
 }
 
+func (s *RedisBackendTestSuite) TestExistsShouldReturnTrueForExistingKey() {
+	s.Nil(s.db.Set(KEY, VALUE))
+	exists, err := s.backend.Exists(KEY)
+	s.Nil(err)
+	s.True(exists)
+}
+
+func (s *RedisBackendTestSuite) TestExistsShouldReturnTrueForNonExistingKey() {
+	exists, err := s.backend.Exists(KEY)
+	s.Nil(err)
+	s.False(exists)
+}
+
 func (s *RedisBackendTestSuite) SetupTest() {
 	var err error
 
