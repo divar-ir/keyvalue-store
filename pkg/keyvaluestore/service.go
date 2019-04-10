@@ -56,6 +56,24 @@ type ReadOptions struct {
 	Consistency ConsistencyLevel
 }
 
+type ExistsRequest struct {
+	Key     string
+	Options ReadOptions
+}
+
+type ExistsResponse struct {
+	Exists bool
+}
+
+type GetTTLRequest struct {
+	Key     string
+	Options ReadOptions
+}
+
+type GetTTLResponse struct {
+	TTL *time.Duration
+}
+
 type Service interface {
 	io.Closer
 
@@ -64,4 +82,6 @@ type Service interface {
 	Delete(ctx context.Context, request *DeleteRequest) error
 	Lock(ctx context.Context, request *LockRequest) error
 	Unlock(ctx context.Context, request *UnlockRequest) error
+	Exists(ctx context.Context, request *ExistsRequest) (*ExistsResponse, error)
+	GetTTL(ctx context.Context, request *GetTTLRequest) (*GetTTLResponse, error)
 }

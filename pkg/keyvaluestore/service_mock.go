@@ -49,7 +49,7 @@ func (m *Mock_Service) Get(ctx context.Context, request *GetRequest) (*GetRespon
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(0).(func(ctx context.Context, request *GetRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(ctx context.Context, request *GetRequest) error); ok {
 		r1 = rf(ctx, request)
 	} else {
 		r1 = ret.Error(1)
@@ -95,4 +95,48 @@ func (m *Mock_Service) Unlock(ctx context.Context, request *UnlockRequest) error
 	}
 
 	return r0
+}
+
+func (m *Mock_Service) Exists(ctx context.Context, request *ExistsRequest) (*ExistsResponse, error) {
+	ret := m.Called(ctx, request)
+
+	var r0 *ExistsResponse
+	if rf, ok := ret.Get(0).(func(ctx context.Context, request *ExistsRequest) *ExistsResponse); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*ExistsResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(ctx context.Context, request *ExistsRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+func (m *Mock_Service) GetTTL(ctx context.Context, request *GetTTLRequest) (*GetTTLResponse, error) {
+	ret := m.Called(ctx, request)
+
+	var r0 *GetTTLResponse
+	if rf, ok := ret.Get(0).(func(ctx context.Context, request *GetTTLRequest) *GetTTLResponse); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*GetTTLResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(ctx context.Context, request *GetTTLRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }

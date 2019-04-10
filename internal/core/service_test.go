@@ -326,6 +326,312 @@ func (s *CoreServiceTestSuite) TestGetShouldUseVotingModeFromClusterView() {
 	s.node3.AssertExpectations(s.T())
 }
 
+func (s *CoreServiceTestSuite) TestGetTTLShouldCallTTLUponBackends() {
+	s.node1.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+	s.applyCore()
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 1,
+		keyvaluestore.VotingModeVoteOnNotFound)
+	value, err := s.core.GetTTL(context.Background(), &keyvaluestore.GetTTLRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.NotNil(value.TTL)
+	if value.TTL != nil {
+		s.Equal(1*time.Minute, *value.TTL)
+	}
+}
+
+func (s *CoreServiceTestSuite) TestGetTTLShouldNotUseDefaultConsistencyLevelIfRequestProvidesIt() {
+	s.applyCore(core.WithDefaultReadConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 0,
+		keyvaluestore.VotingModeVoteOnNotFound)
+	_, err := s.core.GetTTL(context.Background(), &keyvaluestore.GetTTLRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+}
+
+func (s *CoreServiceTestSuite) TestGetTTLShouldUseDefaultConsistencyLevelIfRequestDoesNotProvidesIt() {
+	s.applyCore(core.WithDefaultReadConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 0,
+		keyvaluestore.VotingModeVoteOnNotFound)
+	_, err := s.core.GetTTL(context.Background(), &keyvaluestore.GetTTLRequest{
+		Key: KEY,
+	})
+	s.Nil(err)
+}
+
+func (s *CoreServiceTestSuite) TestGetTTLShouldRepairWithDeleteIfResultIsNotFound() {
+	s.node1.On("Delete", KEY).Once().Return(nil)
+	s.applyCore()
+	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyWriteToEngineOnce(0)
+	s.applyReadToEngineOnce(1*time.Second, keyvaluestore.ErrNotFound, &keyvaluestore.RepairArgs{
+		Err:    keyvaluestore.ErrNotFound,
+		Losers: []keyvaluestore.Backend{s.node1},
+	}, 0, keyvaluestore.VotingModeVoteOnNotFound)
+	_, err := s.core.GetTTL(context.Background(), &keyvaluestore.GetTTLRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.assertStatusCode(err, codes.NotFound)
+	s.node1.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestGetTTLShouldForfeitRepairIfGetHitsError() {
+	s.node1.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+	s.node2.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+	s.node3.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+
+	s.node1.On("Get", KEY).Once().Return(s.dataStr, nil)
+	s.node2.On("Get", KEY).Once().Return(s.dataStr, nil)
+	s.node3.On("Get", KEY).Once().Return(s.dataStr, nil)
+
+	s.applyCore()
+	s.applyCluster(3, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, &keyvaluestore.RepairArgs{
+		Winners: []keyvaluestore.Backend{s.node1, s.node2, s.node3},
+		Value:   &ONE_MINUTE,
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(nil, errors.New("some error"), nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	_, err := s.core.GetTTL(context.Background(), &keyvaluestore.GetTTLRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+	s.node2.AssertExpectations(s.T())
+	s.node3.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestGetTTLShouldAcquireDataAndApplyToLosers() {
+	s.node1.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+	s.node2.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+	s.node3.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+
+	s.node1.On("Get", KEY).Once().Return(s.dataStr, nil)
+	s.node2.On("Get", KEY).Once().Return(s.dataStr, nil)
+
+	s.node3.On("Set", KEY, s.dataStr, 1*time.Minute).Once().Return(nil)
+
+	s.applyCore()
+	s.applyCluster(3, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, &keyvaluestore.RepairArgs{
+		Losers:  []keyvaluestore.Backend{s.node3},
+		Winners: []keyvaluestore.Backend{s.node1, s.node2},
+		Value:   &ONE_MINUTE,
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(s.dataStr, nil, nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.applyWriteToEngineOnce(0)
+
+	_, err := s.core.GetTTL(context.Background(), &keyvaluestore.GetTTLRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+	s.node2.AssertExpectations(s.T())
+	s.node3.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldCallExistsUponBackends() {
+	s.node1.On("Exists", KEY).Once().Return(true, nil)
+	s.applyCore()
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(true, nil, nil, 1,
+		keyvaluestore.VotingModeVoteOnNotFound)
+	value, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.Equal(true, value.Exists)
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldNotUseDefaultConsistencyLevelIfRequestProvidesIt() {
+	s.applyCore(core.WithDefaultReadConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(true, nil, nil, 0,
+		keyvaluestore.VotingModeVoteOnNotFound)
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldUseDefaultConsistencyLevelIfRequestDoesNotProvidesIt() {
+	s.applyCore(core.WithDefaultReadConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(0, keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.applyReadToEngineOnce(true, nil, nil, 0,
+		keyvaluestore.VotingModeVoteOnNotFound)
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+	})
+	s.Nil(err)
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldRepairWithDeleteIfResultIsNotFound() {
+	s.node1.On("Delete", KEY).Once().Return(nil)
+	s.applyCore()
+	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyWriteToEngineOnce(0)
+	s.applyReadToEngineOnce(false, nil, &keyvaluestore.RepairArgs{
+		Value:  false,
+		Losers: []keyvaluestore.Backend{s.node1},
+	}, 0, keyvaluestore.VotingModeVoteOnNotFound)
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldForfeitRepairIfTTLHitsError() {
+	s.node1.On("Exists", KEY).Once().Return(true, nil)
+	s.node2.On("Exists", KEY).Once().Return(true, nil)
+	s.node3.On("Exists", KEY).Once().Return(true, nil)
+
+	s.node1.On("TTL", KEY).Once().Return(&ZERO_MINUTE, nil)
+	s.node2.On("TTL", KEY).Once().Return(&ZERO_MINUTE, nil)
+	s.node3.On("TTL", KEY).Once().Return(&ZERO_MINUTE, nil)
+
+	s.applyCore()
+	s.applyCluster(3, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(true, nil, &keyvaluestore.RepairArgs{
+		Winners: []keyvaluestore.Backend{s.node1, s.node2, s.node3},
+		Value:   true,
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ZERO_MINUTE, errors.New("some error"), nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+	s.node2.AssertExpectations(s.T())
+	s.node3.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldForfeitRepairIfGetHitsError() {
+	s.node1.On("Exists", KEY).Once().Return(true, nil)
+	s.node2.On("Exists", KEY).Once().Return(true, nil)
+	s.node3.On("Exists", KEY).Once().Return(true, nil)
+
+	s.node1.On("TTL", KEY).Once().Return(&ZERO_MINUTE, nil)
+	s.node2.On("TTL", KEY).Once().Return(&ZERO_MINUTE, nil)
+	s.node3.On("TTL", KEY).Once().Return(&ZERO_MINUTE, nil)
+
+	s.node1.On("Get", KEY).Once().Return(s.dataStr, nil)
+	s.node2.On("Get", KEY).Once().Return(s.dataStr, nil)
+	s.node3.On("Get", KEY).Once().Return(s.dataStr, nil)
+
+	s.applyCore()
+	s.applyCluster(3, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(true, nil, &keyvaluestore.RepairArgs{
+		Winners: []keyvaluestore.Backend{s.node1, s.node2, s.node3},
+		Value:   true,
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.applyReadToEngineOnce(nil, errors.New("some error"), nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+	s.node2.AssertExpectations(s.T())
+	s.node3.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldAcquireTTLWithDataAndApplyToLosers() {
+	s.node1.On("Exists", KEY).Once().Return(true, nil)
+	s.node2.On("Exists", KEY).Once().Return(true, nil)
+	s.node3.On("Exists", KEY).Once().Return(false, nil)
+
+	s.node1.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+	s.node2.On("TTL", KEY).Once().Return(&ONE_MINUTE, nil)
+
+	s.node1.On("Get", KEY).Once().Return(s.dataStr, nil)
+	s.node2.On("Get", KEY).Once().Return(s.dataStr, nil)
+
+	s.node3.On("Set", KEY, s.dataStr, 1*time.Minute).Once().Return(nil)
+
+	s.applyCore()
+	s.applyCluster(3, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyReadToEngineOnce(true, nil, &keyvaluestore.RepairArgs{
+		Losers:  []keyvaluestore.Backend{s.node3},
+		Winners: []keyvaluestore.Backend{s.node1, s.node2},
+		Value:   true,
+	}, 3, keyvaluestore.VotingModeVoteOnNotFound)
+	s.applyReadToEngineOnce(&ONE_MINUTE, nil, nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.applyReadToEngineOnce(s.dataStr, nil, nil, 2,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.applyWriteToEngineOnce(0)
+
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+	s.node2.AssertExpectations(s.T())
+	s.node3.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestExistsShouldUseVotingModeFromClusterView() {
+	s.node1.On("Exists", KEY).Once().Return(true, nil)
+
+	s.applyCore()
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL,
+		s.withVotingMode(keyvaluestore.VotingModeSkipVoteOnNotFound))
+	s.applyReadToEngineOnce(true, nil, nil, 1,
+		keyvaluestore.VotingModeSkipVoteOnNotFound)
+
+	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
+		Key: KEY,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: keyvaluestore.ConsistencyLevel_ALL,
+		},
+	})
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+}
+
 func (s *CoreServiceTestSuite) TestDeleteShouldCallDeleteOnNodes() {
 	s.node1.On("Delete", KEY).Once().Return(nil)
 	s.applyCore()
