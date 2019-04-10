@@ -111,6 +111,7 @@ func (s *coreService) Get(ctx context.Context, request *keyvaluestore.GetRequest
 		ttlValue, err := s.engine.Read(args.Winners, 1, ttlOperator, nil, s.durationComparer,
 			keyvaluestore.VotingModeSkipVoteOnNotFound)
 		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
 			return
 		}
 
@@ -243,6 +244,7 @@ func (s *coreService) Exists(ctx context.Context,
 		ttlValue, err := s.engine.Read(args.Winners, s.majority(len(args.Winners)),
 			ttlOperator, nil, s.durationComparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
 		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
 			return
 		}
 
@@ -263,6 +265,7 @@ func (s *coreService) Exists(ctx context.Context,
 		rawValue, err := s.engine.Read(args.Winners, s.majority(len(args.Winners)),
 			getOperator, nil, s.byteComparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
 		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
 			return
 		}
 
@@ -340,6 +343,7 @@ func (s *coreService) GetTTL(ctx context.Context,
 		rawValue, err := s.engine.Read(args.Winners, s.majority(len(args.Winners)),
 			getOperator, nil, s.byteComparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
 		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
 			return
 		}
 
