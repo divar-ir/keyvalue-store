@@ -14,6 +14,10 @@ import (
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
 )
 
+const (
+	acceptableDurationDiff = 2 * time.Second
+)
+
 type coreService struct {
 	cluster                 keyvaluestore.Cluster
 	engine                  keyvaluestore.Engine
@@ -461,7 +465,12 @@ func (s *coreService) durationComparer(x, y interface{}) bool {
 		return false
 	}
 
-	return *(x.(*time.Duration)) == *(y.(*time.Duration))
+	diff := *(x.(*time.Duration)) - *(y.(*time.Duration))
+	if diff < 0 {
+		diff = -diff
+	}
+
+	return diff < acceptableDurationDiff
 }
 
 func (s *coreService) booleanComparer(x, y interface{}) bool {
