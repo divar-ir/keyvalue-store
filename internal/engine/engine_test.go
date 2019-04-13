@@ -319,6 +319,19 @@ func (s *EngineTestSuite) TestReadShouldRepairOthersWithFirstDataOnVoteModeSkipN
 	s.assertAllCalled()
 }
 
+func (s *EngineTestSuite) TestReadShouldReturnNotFoundIfAllVotesAreZeroOnSkipVoteNotFound() {
+	s.setNodeOnError(0, keyvaluestore.ErrNotFound)
+	s.setNodeOnError(1, keyvaluestore.ErrNotFound)
+	s.setNodeOnError(2, keyvaluestore.ErrNotFound)
+	_, err := s.engine.Read(s.nodes, 1, s.readOperator, func(args keyvaluestore.RepairArgs) {
+		s.FailNow("repair should not have been called")
+	}, s.comparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
+	s.Equal(keyvaluestore.ErrNotFound, err)
+	s.wg.Wait()
+	s.assertAllCalled()
+	time.Sleep(50 * time.Millisecond)
+}
+
 func (s *EngineTestSuite) assertAllCalled() {
 	if s.engine != nil {
 		s.Nil(s.engine.Close())

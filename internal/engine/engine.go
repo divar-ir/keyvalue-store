@@ -226,7 +226,12 @@ func (e *keyValueEngine) waitForReadVote(wg *sync.WaitGroup,
 						repair(args)
 					}
 				} else if !votes.Empty() || lastErr == nil {
-					finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrConsistency}
+					_, winnerVote := votes.MaxVote()
+					if winnerVote == 0 {
+						finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrNotFound}
+					} else {
+						finalResultChannel <- asyncReadResult{err: keyvaluestore.ErrConsistency}
+					}
 					close(finalResultChannel)
 				} else {
 					finalResultChannel <- asyncReadResult{err: lastErr}
