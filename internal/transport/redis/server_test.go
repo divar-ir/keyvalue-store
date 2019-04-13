@@ -445,6 +445,68 @@ func (s *RedisTransportTestSuite) TestTTLShouldReturnNumberOfSeconds() {
 	wg.Wait()
 }
 
+func (s *RedisTransportTestSuite) TestMSetShouldSetMultipleKeys() {
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Set", mock.Anything, mock.MatchedBy(func(setRequest *keyvaluestore.SetRequest) bool {
+		return setRequest.Key == "A"
+	})).Times(1).Run(func(args mock.Arguments) {
+		wg.Done()
+	}).Return(nil)
+
+	core.On("Set", mock.Anything, mock.MatchedBy(func(setRequest *keyvaluestore.SetRequest) bool {
+		return setRequest.Key == "B"
+	})).Times(1).Run(func(args mock.Arguments) {
+		wg.Done()
+	}).Return(nil)
+
+	core.On("Set", mock.Anything, mock.MatchedBy(func(setRequest *keyvaluestore.SetRequest) bool {
+		return setRequest.Key == "C"
+	})).Times(1).Run(func(args mock.Arguments) {
+		wg.Done()
+	}).Return(nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+
+	err := client.MSet("A", 1, "B", 2, "C", 3).Err()
+	s.Nil(err)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestMGetShouldReturnNilInMiddleOfKeys() {
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Get", mock.Anything, mock.MatchedBy(func(getRequest *keyvaluestore.GetRequest) bool {
+		return getRequest.Key == "A" || getRequest.Key == "C"
+	})).Times(2).Return(&keyvaluestore.GetResponse{
+		Data: []byte(VALUE),
+	}, nil).Run(func(args mock.Arguments) {
+		wg.Done()
+	})
+	core.On("Get", mock.Anything, mock.MatchedBy(func(getRequest *keyvaluestore.GetRequest) bool {
+		return getRequest.Key == "B"
+	})).Times(1).Run(func(args mock.Arguments) {
+		wg.Done()
+	}).Return(nil, status.Error(codes.NotFound, "key not found"))
+
+	s.runServer(core)
+	client := s.makeClient()
+
+	result, err := client.MGet("A", "B", "C").Result()
+	s.Nil(err)
+
+	s.Equal(3, len(result))
+	s.Equal(VALUE, result[0])
+	s.Nil(result[1])
+	s.Equal(VALUE, result[2])
+	wg.Wait()
+}
+
 func (s *RedisTransportTestSuite) runServer(core keyvaluestore.Service) {
 	s.server = redis.New(core, s.port, CONSISTENCY, CONSISTENCY)
 	s.Nil(s.server.Start())

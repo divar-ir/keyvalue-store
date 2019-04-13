@@ -143,6 +143,12 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "GET":
 		err = s.handleGetCommand(command, writer)
 
+	case "MGET":
+		err = s.handlerMGetCommand(command, writer)
+
+	case "MSET":
+		err = s.handleMSetCommand(command, writer)
+
 	case "PING":
 		err = s.handlePingCommand(command, writer)
 
@@ -337,6 +343,57 @@ func (s *redisServer) handleExistsCommand(command *redisproto.Command, writer *r
 	return writer.WriteInt(existing)
 }
 
+func (s *redisServer) handleMSetCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() < 3 {
+		return wrapStringAsError("expected at least 3 arguments for MSET command")
+	}
+
+	if command.ArgCount()%2 == 0 {
+		return wrapStringAsError("key-value pairs for MSET command")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	errorChannel := make(chan error, 1)
+
+	for i := 2; i < command.ArgCount(); i += 2 {
+		key := string(command.Get(i - 1))
+		value := command.Get(i)
+		wg.Add(1)
+
+		go func(targetKey string, targetValue []byte) {
+			defer wg.Done()
+
+			request := &keyvaluestore.SetRequest{
+				Key:  targetKey,
+				Data: targetValue,
+				Options: keyvaluestore.WriteOptions{
+					Consistency: s.writeConsistency,
+				},
+			}
+			err := s.core.Set(ctx, request)
+			if err != nil {
+				select {
+				case errorChannel <- wrapError(err):
+				default:
+				}
+			}
+		}(key, value)
+	}
+
+	wg.Wait()
+
+	select {
+	case err := <-errorChannel:
+		return err
+
+	default:
+		return writer.WriteBulkString("OK")
+	}
+}
+
 func (s *redisServer) handleSetEXCommand(command *redisproto.Command, writer *redisproto.Writer) error {
 	if command.ArgCount() < 4 {
 		return wrapStringAsError("expected at least 4 arguments for SETEX command")
@@ -391,6 +448,75 @@ func (s *redisServer) handleDeleteCommand(command *redisproto.Command, writer *r
 	}
 
 	return writer.WriteInt(int64(command.ArgCount() - 1))
+}
+
+func (s *redisServer) handlerMGetCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() < 2 {
+		return wrapStringAsError("expected at least 2 arguments for MGET command")
+	}
+
+	bulks := make([][]byte, command.ArgCount()-1)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	errorChannel := make(chan error, 1)
+
+	for i := 1; i < command.ArgCount(); i++ {
+		key := string(command.Get(i))
+		wg.Add(1)
+
+		go func(targetIndex int, targetKey string) {
+			defer wg.Done()
+
+			request := &keyvaluestore.GetRequest{
+				Key: targetKey,
+				Options: keyvaluestore.ReadOptions{
+					Consistency: s.readConsistency,
+				},
+			}
+
+			result, err := s.core.Get(ctx, request)
+			if err != nil {
+				grpcStatus, ok := status.FromError(err)
+
+				if ok && grpcStatus.Code() == codes.NotFound {
+					bulks[targetIndex] = nil
+					return
+				}
+
+				select {
+				case errorChannel <- wrapError(err):
+				default:
+				}
+
+				return
+			}
+
+			if result == nil || result.Data == nil {
+				err = wrapStringAsError("result is nil or does not contain data: %v", result)
+				select {
+				case errorChannel <- err:
+				default:
+				}
+
+				return
+			}
+
+			bulks[targetIndex] = result.Data
+		}(i-1, key)
+	}
+
+	wg.Wait()
+
+	select {
+	case err := <-errorChannel:
+		return err
+
+	default:
+		return writer.WriteBulks(bulks...)
+	}
 }
 
 func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redisproto.Writer) error {
