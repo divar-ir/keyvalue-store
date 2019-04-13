@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
@@ -316,31 +317,50 @@ func (s *redisServer) handleExistsCommand(command *redisproto.Command, writer *r
 	}
 
 	var existing int64
+	var wg sync.WaitGroup
+	errorChannel := make(chan error, 1)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
 
 	for i := 1; i < command.ArgCount(); i++ {
 		key := string(command.Get(i))
+		wg.Add(1)
 
-		request := &keyvaluestore.ExistsRequest{
-			Key: key,
-			Options: keyvaluestore.ReadOptions{
-				Consistency: s.readConsistency,
-			},
-		}
+		go func(targetKey string) {
+			defer wg.Done()
+			request := &keyvaluestore.ExistsRequest{
+				Key: key,
+				Options: keyvaluestore.ReadOptions{
+					Consistency: s.readConsistency,
+				},
+			}
 
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-		defer cancel()
+			response, err := s.core.Exists(ctx, request)
+			if err != nil {
+				select {
+				case errorChannel <- wrapError(err):
+				default:
+				}
 
-		response, err := s.core.Exists(ctx, request)
-		if err != nil {
-			return wrapError(err)
-		}
+				return
+			}
 
-		if response.Exists {
-			existing = existing + 1
-		}
+			if response.Exists {
+				atomic.AddInt64(&existing, 1)
+			}
+		}(key)
 	}
 
-	return writer.WriteInt(existing)
+	wg.Wait()
+
+	select {
+	case err := <-errorChannel:
+		return err
+
+	default:
+		return writer.WriteInt(existing)
+	}
 }
 
 func (s *redisServer) handleMSetCommand(command *redisproto.Command, writer *redisproto.Writer) error {
