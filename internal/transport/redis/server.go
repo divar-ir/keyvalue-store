@@ -520,6 +520,10 @@ func (s *redisServer) handlerMGetCommand(command *redisproto.Command, writer *re
 }
 
 func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() < 2 {
+		return wrapStringAsError("expected at least 2 arguments for GET command")
+	}
+
 	key := string(command.Get(1))
 
 	request := &keyvaluestore.GetRequest{
