@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -107,8 +108,8 @@ func (s *redisServer) handleConnection(conn net.Conn) {
 	writer := redisproto.NewWriter(bufio.NewWriter(conn))
 
 	for {
-		if err := s.connectionLoop(parser, writer); err != nil {
-			logrus.WithError(err).Info("unexpected error while handling connection")
+		if err := s.connectionLoop(parser, writer); err != nil && err != keyvaluestore.ErrClosed {
+			logrus.WithError(err).Error("unexpected error while handling connection")
 			return
 		}
 	}
@@ -124,7 +125,11 @@ func (s *redisServer) connectionLoop(parser *redisproto.Parser, writer *redispro
 			return writer.WriteError(err.Error())
 		}
 
-		return keyvaluestore.ErrClosed
+		if err == io.EOF {
+			return keyvaluestore.ErrClosed
+		}
+
+		return err
 	}
 
 	return s.dispatchCommand(command, writer)
