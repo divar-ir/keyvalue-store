@@ -73,13 +73,9 @@ func (s *RedisBackendTestSuite) TestGetShouldReturnErrClosedIfBackendIsClosed() 
 	s.Equal(keyvaluestore.ErrClosed, err)
 }
 
-func (s *RedisBackendTestSuite) TestTTLShouldReturnNotFoundOrZeroIfKeyDoesNotExist() {
-	res, err := s.backend.TTL(KEY)
-	if err != nil {
-		s.Equal(keyvaluestore.ErrNotFound, err)
-	} else {
-		s.Zero(res)
-	}
+func (s *RedisBackendTestSuite) TestTTLShouldReturnNotFoundIfKeyDoesNotExist() {
+	_, err := s.backend.TTL(KEY)
+	s.Equal(keyvaluestore.ErrNotFound, err)
 }
 
 func (s *RedisBackendTestSuite) TestTTLShouldReturnZeroIfTTLIsNotEmployed() {

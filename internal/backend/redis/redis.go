@@ -69,11 +69,16 @@ func (r *redisBackend) TTL(key string) (*time.Duration, error) {
 		return nil, err
 	}
 
-	if result < 0 {
-		return nil, nil
-	}
+	switch {
+	case result == -2*time.Second:
+		return nil, keyvaluestore.ErrNotFound
 
-	return &result, nil
+	case result == -1*time.Second:
+		return nil, nil
+
+	default:
+		return &result, nil
+	}
 }
 
 func (r *redisBackend) Exists(key string) (bool, error) {
