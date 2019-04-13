@@ -347,6 +347,104 @@ func (s *RedisTransportTestSuite) TestShouldConsiderUnavailableAsSetNXZeroResult
 	wg.Wait()
 }
 
+func (s *RedisTransportTestSuite) TestExistsShouldCountExistingKeyAsIntergerOne() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Exists", mock.Anything, mock.MatchedBy(func(existsRequest *keyvaluestore.ExistsRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(&keyvaluestore.ExistsResponse{
+		Exists: true,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	count, err := client.Exists(Key).Result()
+	s.Nil(err)
+	s.Equal(int64(1), count)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestExistsShouldCountNonExistingKeyAsIntergerZero() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Exists", mock.Anything, mock.MatchedBy(func(existsRequest *keyvaluestore.ExistsRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(&keyvaluestore.ExistsResponse{
+		Exists: false,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	count, err := client.Exists(Key).Result()
+	s.Nil(err)
+	s.Equal(int64(0), count)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestTTLShouldConsiderNonExistingKeyAsIntegerMinusTwo() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("GetTTL", mock.Anything, mock.MatchedBy(func(getTTLRequest *keyvaluestore.GetTTLRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(nil, status.Error(codes.NotFound, "not found"))
+
+	s.runServer(core)
+	client := s.makeClient()
+	duration, err := client.TTL(Key).Result()
+	s.Nil(err)
+	s.Equal(-2*time.Second, duration)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestTTLShouldConsiderNonExipyKeyAsIntegerMinusOne() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("GetTTL", mock.Anything, mock.MatchedBy(func(getTTLRequest *keyvaluestore.GetTTLRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(&keyvaluestore.GetTTLResponse{}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	duration, err := client.TTL(Key).Result()
+	s.Nil(err)
+	s.Equal(-1*time.Second, duration)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestTTLShouldReturnNumberOfSeconds() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	oneMinute := 1 * time.Minute
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("GetTTL", mock.Anything, mock.MatchedBy(func(getTTLRequest *keyvaluestore.GetTTLRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(&keyvaluestore.GetTTLResponse{
+		TTL: &oneMinute,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	duration, err := client.TTL(Key).Result()
+	s.Nil(err)
+	s.Equal(1*time.Minute, duration)
+	wg.Wait()
+}
+
 func (s *RedisTransportTestSuite) runServer(core keyvaluestore.Service) {
 	s.server = redis.New(core, s.port, CONSISTENCY, CONSISTENCY)
 	s.Nil(s.server.Start())

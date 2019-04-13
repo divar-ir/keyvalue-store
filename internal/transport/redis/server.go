@@ -151,6 +151,12 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "SETEX":
 		err = s.handleSetEXCommand(command, writer)
 
+	case "EXISTS":
+		err = s.handleExistsCommand(command, writer)
+
+	case "TTL":
+		err = s.handleTTLCommand(command, writer)
+
 	default:
 		logrus.WithField("cmd", cmd).Error("command not supported")
 
@@ -253,6 +259,65 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 	}
 
 	return writer.WriteBulkString("OK")
+}
+
+func (s *redisServer) handleTTLCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() != 2 {
+		return wrapStringAsError("expected exactly 2 arguments for TTL command")
+	}
+
+	key := string(command.Get(1))
+	request := &keyvaluestore.GetTTLRequest{
+		Key: key,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: s.readConsistency,
+		},
+	}
+	response, err := s.core.GetTTL(context.Background(), request)
+	if err != nil {
+		grpcStatus, ok := status.FromError(err)
+
+		if ok && grpcStatus.Code() == codes.NotFound {
+			return writer.WriteInt(-2)
+		}
+		return wrapError(err)
+	}
+
+	if response.TTL == nil {
+		return writer.WriteInt(-1)
+	}
+
+	return writer.WriteInt(int64(*response.TTL) / int64(time.Second))
+}
+
+func (s *redisServer) handleExistsCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() < 2 {
+		return wrapStringAsError("expected at least 2 arguments for EXISTS command")
+	}
+
+	var existing int64
+
+	for i := 1; i < command.ArgCount(); i++ {
+		key := string(command.Get(i))
+
+		request := &keyvaluestore.ExistsRequest{
+			Key: key,
+			Options: keyvaluestore.ReadOptions{
+				Consistency: s.readConsistency,
+			},
+		}
+
+		response, err := s.core.Exists(context.Background(), request)
+		if err != nil {
+			return wrapError(err)
+		}
+
+		if response.Exists {
+			existing = existing + 1
+		}
+	}
+
+	return writer.WriteInt(existing)
 }
 
 func (s *redisServer) handleSetEXCommand(command *redisproto.Command, writer *redisproto.Writer) error {
