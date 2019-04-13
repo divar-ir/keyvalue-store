@@ -18,6 +18,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	defaultTimeout = 1 * time.Second
+)
+
 type redisServer struct {
 	listenPort       int
 	core             keyvaluestore.Service
@@ -239,7 +243,10 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 			},
 		}
 
-		err = s.core.Set(context.Background(), request)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+
+		err = s.core.Set(ctx, request)
 		if err != nil {
 			return wrapError(err)
 		}
@@ -252,7 +259,10 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 			},
 		}
 
-		err = s.core.Lock(context.Background(), request)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+
+		err = s.core.Lock(ctx, request)
 		if err != nil {
 			return wrapError(err)
 		}
@@ -273,7 +283,11 @@ func (s *redisServer) handleTTLCommand(command *redisproto.Command, writer *redi
 			Consistency: s.readConsistency,
 		},
 	}
-	response, err := s.core.GetTTL(context.Background(), request)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	response, err := s.core.GetTTL(ctx, request)
 	if err != nil {
 		grpcStatus, ok := status.FromError(err)
 
@@ -307,7 +321,10 @@ func (s *redisServer) handleExistsCommand(command *redisproto.Command, writer *r
 			},
 		}
 
-		response, err := s.core.Exists(context.Background(), request)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+
+		response, err := s.core.Exists(ctx, request)
 		if err != nil {
 			return wrapError(err)
 		}
@@ -342,7 +359,10 @@ func (s *redisServer) handleSetEXCommand(command *redisproto.Command, writer *re
 		},
 	}
 
-	err = s.core.Set(context.Background(), request)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	err = s.core.Set(ctx, request)
 	if err != nil {
 		return wrapError(err)
 	}
@@ -361,7 +381,10 @@ func (s *redisServer) handleDeleteCommand(command *redisproto.Command, writer *r
 			},
 		}
 
-		err := s.core.Delete(context.Background(), request)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+
+		err := s.core.Delete(ctx, request)
 		if err != nil {
 			return wrapError(err)
 		}
@@ -380,7 +403,10 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 		},
 	}
 
-	result, err := s.core.Get(context.Background(), request)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	result, err := s.core.Get(ctx, request)
 	if err != nil {
 		grpcStatus, ok := status.FromError(err)
 
