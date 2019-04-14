@@ -108,8 +108,11 @@ func (s *redisServer) handleConnection(conn net.Conn) {
 	writer := redisproto.NewWriter(bufio.NewWriter(conn))
 
 	for {
-		if err := s.connectionLoop(parser, writer); err != nil && err != keyvaluestore.ErrClosed {
-			logrus.WithError(err).Error("unexpected error while handling connection")
+		if err := s.connectionLoop(parser, writer); err != nil {
+			if err != keyvaluestore.ErrClosed {
+				logrus.WithError(err).Error("unexpected error while handling connection")
+			}
+
 			return
 		}
 	}
