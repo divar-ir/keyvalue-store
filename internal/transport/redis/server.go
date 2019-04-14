@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/cafebazaar/keyvalue-store/pkg/keyvaluestore"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	redisproto "github.com/secmask/go-redisproto"
-	"github.com/sirupsen/logrus"
+	redisproto "github.com/cafebazaar/go-redisproto"
 )
 
 const (
