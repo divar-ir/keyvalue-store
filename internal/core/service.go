@@ -169,7 +169,7 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 
 func (s *coreService) Lock(ctx context.Context, request *keyvaluestore.LockRequest) error {
 	writeOperator := func(node keyvaluestore.Backend) error {
-		return node.Lock(request.Key, []byte("-"), request.Expiration)
+		return node.Lock(request.Key, request.Data, request.Expiration)
 	}
 
 	unlockOperator := func(node keyvaluestore.Backend) error {

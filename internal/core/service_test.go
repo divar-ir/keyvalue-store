@@ -675,9 +675,10 @@ func (s *CoreServiceTestSuite) TestLockShouldCallLockOnNode() {
 	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
 	s.applyCluster(1, keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.applyWriteToEngineOnce(1, WithMode(keyvaluestore.OperationModeSequential))
-	s.node1.On("Lock", KEY, []byte("-"), mock.Anything).Once().Return(nil)
+	s.node1.On("Lock", KEY, s.dataStr, mock.Anything).Once().Return(nil)
 	err := s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
-		Key: KEY,
+		Key:  KEY,
+		Data: s.dataStr,
 	})
 	s.Nil(err)
 }
@@ -687,11 +688,12 @@ func (s *CoreServiceTestSuite) TestLockShouldPreserveOrder() {
 	s.applyCluster(3, keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.applyWriteToEngineOnce(3, WithOrdering(s.node3, s.node2, s.node1),
 		WithMode(keyvaluestore.OperationModeSequential))
-	s.node1.On("Lock", KEY, []byte("-"), mock.Anything).Once().Return(nil)
-	s.node2.On("Lock", KEY, []byte("-"), mock.Anything).Once().Return(nil)
-	s.node3.On("Lock", KEY, []byte("-"), mock.Anything).Once().Return(nil)
+	s.node1.On("Lock", KEY, s.dataStr, mock.Anything).Once().Return(nil)
+	s.node2.On("Lock", KEY, s.dataStr, mock.Anything).Once().Return(nil)
+	s.node3.On("Lock", KEY, s.dataStr, mock.Anything).Once().Return(nil)
 	err := s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
-		Key: KEY,
+		Key:  KEY,
+		Data: s.dataStr,
 	})
 	s.Nil(err)
 }
@@ -705,10 +707,11 @@ func (s *CoreServiceTestSuite) TestLockShouldRollbackUsingUnlock() {
 			Nodes: []keyvaluestore.Backend{s.node1},
 		}))
 	s.applyWriteToEngineOnce(0)
-	s.node1.On("Lock", KEY, []byte("-"), mock.Anything).Once().Return(errors.New("some error"))
+	s.node1.On("Lock", KEY, s.dataStr, mock.Anything).Once().Return(errors.New("some error"))
 	s.node1.On("Unlock", KEY).Once().Return(nil)
 	err := s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
-		Key: KEY,
+		Key:  KEY,
+		Data: s.dataStr,
 	})
 	s.Nil(err)
 	s.node1.AssertExpectations(s.T())
