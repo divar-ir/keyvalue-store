@@ -154,6 +154,15 @@ func (s *StaticClusterTestSuite) TestReadBackendsShouldConsiderLocalConnection()
 	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.local})
 }
 
+func (s *StaticClusterTestSuite) TestReadOneFirstAvailablePolicyShouldReturnAllNodesInRead() {
+	view, err := s.makeCluster(3, true,
+		static.WithPolicy(keyvaluestore.PolicyReadOneFirstAvailable)).Read(
+		"", keyvaluestore.ConsistencyLevel_ONE)
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.local})
+}
+
 func (s *StaticClusterTestSuite) TestReadOneFirstAvailablePolicyShouldLeaveConsistencyAllUnChanged() {
 	defaultView, err := s.makeCluster(3, true).Read("", keyvaluestore.ConsistencyLevel_ALL)
 	s.Nil(err)

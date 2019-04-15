@@ -81,8 +81,18 @@ func (s staticCluster) Read(key string,
 		}, nil
 
 	case keyvaluestore.ConsistencyLevel_ONE:
+		var nodes []keyvaluestore.Backend
+
+		switch s.readOnePolicy {
+		case keyvaluestore.PolicyReadOneFirstAvailable:
+			nodes = s.allNodes()
+
+		default:
+			nodes = s.localNodeOrRandomNode()
+		}
+
 		return keyvaluestore.ReadClusterView{
-			Backends:     s.localNodeOrRandomNode(),
+			Backends:     nodes,
 			VoteRequired: 1,
 			VotingMode:   votingMode,
 		}, nil
