@@ -184,6 +184,8 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 
 	if err != nil {
 		if execErr, ok := err.(*commandExecutionError); ok {
+			logrus.WithError(execErr.err).WithField("cmd", cmd).Error(execErr.Error())
+
 			err = writer.WriteError(execErr.Error())
 			if err != nil {
 				return err
