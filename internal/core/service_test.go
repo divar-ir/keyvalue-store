@@ -497,9 +497,10 @@ func (s *CoreServiceTestSuite) TestExistsShouldRepairWithDeleteIfResultIsNotFoun
 	s.applyCore()
 	s.applyCluster(0, keyvaluestore.ConsistencyLevel_ALL)
 	s.applyWriteToEngineOnce(0)
-	s.applyReadToEngineOnce(false, nil, &keyvaluestore.RepairArgs{
+	s.applyReadToEngineOnce(false, keyvaluestore.ErrNotFound, &keyvaluestore.RepairArgs{
 		Value:  false,
 		Losers: []keyvaluestore.Backend{s.node1},
+		Err:    keyvaluestore.ErrNotFound,
 	}, 0, keyvaluestore.VotingModeVoteOnNotFound)
 	_, err := s.core.Exists(context.Background(), &keyvaluestore.ExistsRequest{
 		Key: KEY,

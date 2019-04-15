@@ -210,7 +210,15 @@ func (s *coreService) Exists(ctx context.Context,
 	request *keyvaluestore.ExistsRequest) (*keyvaluestore.ExistsResponse, error) {
 
 	readOperator := func(node keyvaluestore.Backend) (interface{}, error) {
-		return node.Exists(request.Key)
+		result, err := node.Exists(request.Key)
+		if err != nil {
+			return false, err
+		}
+		if !result {
+			return false, keyvaluestore.ErrNotFound
+		}
+
+		return true, nil
 	}
 
 	deleteOperator := func(node keyvaluestore.Backend) error {
@@ -229,9 +237,8 @@ func (s *coreService) Exists(ctx context.Context,
 	}
 
 	repairOperator := func(args keyvaluestore.RepairArgs) {
-		exists := args.Value.(bool)
 
-		if !exists {
+		if args.Err == keyvaluestore.ErrNotFound {
 			err := s.engine.Write(args.Losers, 0, deleteOperator, deleteRollbackOperator,
 				keyvaluestore.OperationModeConcurrent)
 			if err != nil {
@@ -290,6 +297,10 @@ func (s *coreService) Exists(ctx context.Context,
 	rawResult, err := s.performRead(request.Key, request.Options, readOperator,
 		repairOperator, s.booleanComparer)
 	if err != nil {
+		if err == keyvaluestore.ErrNotFound {
+			return &keyvaluestore.ExistsResponse{Exists: false}, nil
+		}
+
 		return nil, s.convertErrorToGRPC(err)
 	}
 
