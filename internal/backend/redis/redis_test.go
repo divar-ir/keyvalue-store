@@ -112,25 +112,25 @@ func (s *RedisBackendTestSuite) TestAddressShouldReturnCorrectAddress() {
 }
 
 func (s *RedisBackendTestSuite) TestLockShouldSucceedOnCleanDatabase() {
-	s.Nil(s.backend.Lock(KEY, 1*time.Second))
+	s.Nil(s.backend.Lock(KEY, []byte("-"), 1*time.Second))
 	s.True(s.db.Exists(KEY))
 }
 
 func (s *RedisBackendTestSuite) TestUnlockShouldReleasePreviouslyLockedKey() {
-	s.Nil(s.backend.Lock(KEY, 1*time.Second))
+	s.Nil(s.backend.Lock(KEY, []byte("-"), 1*time.Second))
 	s.Nil(s.backend.Unlock(KEY))
 	s.False(s.db.Exists(KEY))
 }
 
 func (s *RedisBackendTestSuite) TestConsecutiveLockShouldFail() {
-	s.Nil(s.backend.Lock(KEY, 1*time.Second))
-	s.Equal(keyvaluestore.ErrNotAcquired, s.backend.Lock(KEY, 1*time.Second))
+	s.Nil(s.backend.Lock(KEY, []byte("-"), 1*time.Second))
+	s.Equal(keyvaluestore.ErrNotAcquired, s.backend.Lock(KEY, []byte("-"), 1*time.Second))
 }
 
 func (s *RedisBackendTestSuite) TestAfterUnlockShouldBeLockable() {
-	s.Nil(s.backend.Lock(KEY, 1*time.Second))
+	s.Nil(s.backend.Lock(KEY, []byte("-"), 1*time.Second))
 	s.Nil(s.backend.Unlock(KEY))
-	s.Nil(s.backend.Lock(KEY, 1*time.Second))
+	s.Nil(s.backend.Lock(KEY, []byte("-"), 1*time.Second))
 }
 
 func (s *RedisBackendTestSuite) TestExistsShouldReturnTrueForExistingKey() {

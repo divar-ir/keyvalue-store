@@ -108,12 +108,12 @@ func (m *Mock_Backend) Address() string {
 	return r0
 }
 
-func (m *Mock_Backend) Lock(key string, expiration time.Duration) error {
-	ret := m.Called(key, expiration)
+func (m *Mock_Backend) Lock(key string, value []byte, expiration time.Duration) error {
+	ret := m.Called(key, value, expiration)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(key string, expiration time.Duration) error); ok {
-		r0 = rf(key, expiration)
+	if rf, ok := ret.Get(0).(func(key string, value []byte, expiration time.Duration) error); ok {
+		r0 = rf(key, value, expiration)
 	} else {
 		r0 = ret.Error(0)
 	}
