@@ -271,6 +271,7 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 		request := &keyvaluestore.LockRequest{
 			Key:        key,
 			Expiration: expiration,
+			Data:       value,
 			Options: keyvaluestore.WriteOptions{
 				Consistency: keyvaluestore.ConsistencyLevel_MAJORITY,
 			},
@@ -614,8 +615,10 @@ func (s *redisServer) handleSetNXCommand(command *redisproto.Command, writer *re
 	}
 
 	key := string(command.Get(1))
+	value := command.Get(2)
 	request := &keyvaluestore.LockRequest{
-		Key: key,
+		Key:  key,
+		Data: value,
 		Options: keyvaluestore.WriteOptions{
 			Consistency: keyvaluestore.ConsistencyLevel_MAJORITY,
 		},

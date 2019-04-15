@@ -314,10 +314,11 @@ func (s *RedisTransportTestSuite) TestShouldSupportSetIfNotSetViaLocking() {
 	wg.Add(1)
 
 	core := &keyvaluestore.Mock_Service{}
-	core.On("Lock", mock.Anything, mock.MatchedBy(func(request *keyvaluestore.LockRequest) bool {
+	core.On("Lock", mock.Anything, mock.MatchedBy(func(lockRequest *keyvaluestore.LockRequest) bool {
 		defer wg.Done()
 
-		return true
+		s.Equal(VALUE, string(lockRequest.Data))
+		return VALUE == string(lockRequest.Data)
 	})).Return(nil)
 
 	s.runServer(core)
