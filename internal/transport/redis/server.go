@@ -279,6 +279,11 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 
 		err = s.core.Lock(ctx, request)
 		if err != nil {
+			grpcStatus, ok := status.FromError(err)
+			if ok && grpcStatus.Code() == codes.Unavailable {
+				return writer.WriteBulk(nil)
+			}
+
 			return wrapError(err)
 		}
 	}
