@@ -314,7 +314,7 @@ func (s *redisServer) handleTTLCommand(command *redisproto.Command, writer *redi
 	if err != nil {
 		grpcStatus, ok := status.FromError(err)
 
-		if ok && grpcStatus.Code() == codes.NotFound {
+		if ok && (grpcStatus.Code() == codes.NotFound || grpcStatus.Code() == codes.Unavailable) {
 			return writer.WriteInt(-2)
 		}
 		return wrapError(err)
@@ -354,6 +354,11 @@ func (s *redisServer) handleExistsCommand(command *redisproto.Command, writer *r
 
 			response, err := s.core.Exists(ctx, request)
 			if err != nil {
+				grpcStatus, ok := status.FromError(err)
+				if ok && grpcStatus.Code() == codes.Unavailable {
+					return
+				}
+
 				select {
 				case errorChannel <- wrapError(err):
 				default:
@@ -517,7 +522,7 @@ func (s *redisServer) handlerMGetCommand(command *redisproto.Command, writer *re
 			if err != nil {
 				grpcStatus, ok := status.FromError(err)
 
-				if ok && grpcStatus.Code() == codes.NotFound {
+				if ok && (grpcStatus.Code() == codes.NotFound || grpcStatus.Code() == codes.Unavailable) {
 					bulks[targetIndex] = nil
 					return
 				}
@@ -576,7 +581,7 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 	if err != nil {
 		grpcStatus, ok := status.FromError(err)
 
-		if ok && grpcStatus.Code() == codes.NotFound {
+		if ok && (grpcStatus.Code() == codes.NotFound || grpcStatus.Code() == codes.Unavailable) {
 			return writer.WriteBulk(nil)
 		}
 		return wrapError(err)
