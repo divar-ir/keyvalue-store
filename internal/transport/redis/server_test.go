@@ -348,6 +348,46 @@ func (s *RedisTransportTestSuite) TestShouldConsiderUnavailableAsSetNXZeroResult
 	wg.Wait()
 }
 
+func (s *RedisTransportTestSuite) TestExpireShouldCountExistingKeyAsIntergerOne() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Expire", mock.Anything, mock.MatchedBy(func(expireRequest *keyvaluestore.ExpireRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(&keyvaluestore.ExpireResponse{
+		Exists: true,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.Expire(Key, 1*time.Minute).Result()
+	s.Nil(err)
+	s.Equal(true, ok)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestExpireShouldCountNonExistingKeyAsIntergerZero() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Expire", mock.Anything, mock.MatchedBy(func(existsRequest *keyvaluestore.ExpireRequest) bool {
+		defer wg.Done()
+		return true
+	})).Once().Return(&keyvaluestore.ExpireResponse{
+		Exists: false,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.Expire(Key, 1*time.Minute).Result()
+	s.Nil(err)
+	s.Equal(false, ok)
+	wg.Wait()
+}
+
 func (s *RedisTransportTestSuite) TestExistsShouldCountExistingKeyAsIntergerOne() {
 	var wg sync.WaitGroup
 	wg.Add(1)

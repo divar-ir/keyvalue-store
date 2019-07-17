@@ -176,6 +176,18 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "TTL":
 		err = s.handleTTLCommand(command, writer)
 
+	case "EXPIRE":
+		err = s.handleExpireCommand(command, writer, "EXPIRE", true, false)
+
+	case "PEXPIRE":
+		err = s.handleExpireCommand(command, writer, "PEXPIRE", false, false)
+
+	case "EXPIREAT":
+		err = s.handleExpireCommand(command, writer, "EXPIREAT", true, true)
+
+	case "PEXPIREAT":
+		err = s.handleExpireCommand(command, writer, "PEXPIREAT", false, true)
+
 	default:
 		logrus.WithField("cmd", cmd).Error("command not supported")
 
@@ -325,6 +337,60 @@ func (s *redisServer) handleTTLCommand(command *redisproto.Command, writer *redi
 	}
 
 	return writer.WriteInt(int64(*response.TTL) / int64(time.Second))
+}
+
+func (s *redisServer) handleExpireCommand(
+	command *redisproto.Command,
+	writer *redisproto.Writer,
+	cmd string,
+	timeInSeconds bool,
+	expireAt bool) error {
+
+	if command.ArgCount() != 3 {
+		return wrapStringAsError(fmt.Sprintf("expected exactly 3 arguments for %s command", cmd))
+	}
+
+	key := string(command.Get(1))
+	durationInteger, err := strconv.ParseInt(string(command.Get(2)), 10, 63)
+	if err != nil {
+		return wrapError(err)
+	}
+	var duration time.Duration
+
+	if expireAt {
+		if timeInSeconds {
+			duration = time.Unix(durationInteger, 0).Sub(time.Now())
+		} else {
+			duration = time.Unix(durationInteger/1000, (durationInteger%1000)*1000000).Sub(time.Now())
+		}
+	} else {
+		if timeInSeconds {
+			duration = time.Duration(durationInteger) * time.Second
+		} else {
+			duration = time.Duration(durationInteger) * time.Millisecond
+		}
+	}
+
+	request := &keyvaluestore.ExpireRequest{
+		Key:        key,
+		Expiration: duration,
+		Options: keyvaluestore.WriteOptions{
+			Consistency: s.readConsistency,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	result, err := s.core.Expire(ctx, request)
+	if err != nil {
+		return wrapError(err)
+	}
+
+	if result.Exists {
+		return writer.WriteInt(1)
+	}
+	return writer.WriteInt(0)
 }
 
 func (s *redisServer) handleExistsCommand(command *redisproto.Command, writer *redisproto.Writer) error {
