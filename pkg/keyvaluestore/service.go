@@ -74,6 +74,16 @@ type GetTTLResponse struct {
 	TTL *time.Duration
 }
 
+type ExpireRequest struct {
+	Key        string
+	Expiration time.Duration
+	Options    WriteOptions
+}
+
+type ExpireResponse struct {
+	Exists bool
+}
+
 type Service interface {
 	io.Closer
 
@@ -84,4 +94,5 @@ type Service interface {
 	Unlock(ctx context.Context, request *UnlockRequest) error
 	Exists(ctx context.Context, request *ExistsRequest) (*ExistsResponse, error)
 	GetTTL(ctx context.Context, request *GetTTLRequest) (*GetTTLResponse, error)
+	Expire(ctx context.Context, request *ExpireRequest) (*ExpireResponse, error)
 }

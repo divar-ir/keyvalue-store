@@ -206,6 +206,104 @@ func (s *coreService) Unlock(ctx context.Context, request *keyvaluestore.UnlockR
 		rollbackOperator, keyvaluestore.OperationModeConcurrent))
 }
 
+func (s *coreService) Expire(ctx context.Context,
+	request *keyvaluestore.ExpireRequest) (*keyvaluestore.ExpireResponse, error) {
+
+	readOperator := func(node keyvaluestore.Backend) (interface{}, error) {
+		err := node.Expire(request.Key, request.Expiration)
+		if err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
+	deleteOperator := func(node keyvaluestore.Backend) error {
+		return node.Delete(request.Key)
+	}
+
+	deleteRollbackOperator := func(args keyvaluestore.RollbackArgs) {
+	}
+
+	ttlOperator := func(node keyvaluestore.Backend) (interface{}, error) {
+		return node.TTL(request.Key)
+	}
+
+	getOperator := func(node keyvaluestore.Backend) (interface{}, error) {
+		return node.Get(request.Key)
+	}
+
+	repairOperator := func(args keyvaluestore.RepairArgs) {
+		if args.Err == keyvaluestore.ErrNotFound {
+			err := s.engine.Write(args.Losers, 0, deleteOperator, deleteRollbackOperator,
+				keyvaluestore.OperationModeConcurrent)
+			if err != nil {
+				logrus.WithError(err).Error("unexpected error during read repair")
+			}
+
+			return
+		}
+
+		ttlValue, err := s.engine.Read(args.Winners, s.majority(len(args.Winners)),
+			ttlOperator, nil, s.durationComparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
+		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
+			return
+		}
+
+		var ttl time.Duration
+		if args.Value != nil {
+			ttl = *(ttlValue.(*time.Duration))
+			if ttl == 0 {
+				err := s.engine.Write(args.Losers, 0, deleteOperator, deleteRollbackOperator,
+					keyvaluestore.OperationModeConcurrent)
+				if err != nil {
+					logrus.WithError(err).Error("unexpected error during read repair")
+				}
+
+				return
+			}
+		}
+
+		rawValue, err := s.engine.Read(args.Winners, s.majority(len(args.Winners)),
+			getOperator, nil, s.byteComparer, keyvaluestore.VotingModeSkipVoteOnNotFound)
+		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
+			return
+		}
+
+		setOperator := func(node keyvaluestore.Backend) error {
+			return node.Set(request.Key, rawValue.([]byte), ttl)
+		}
+
+		setRollbackOperator := func(rollbackArgs keyvaluestore.RollbackArgs) {
+			err := s.engine.Write(rollbackArgs.Nodes, 0, deleteOperator, deleteRollbackOperator,
+				keyvaluestore.OperationModeConcurrent)
+			if err != nil {
+				logrus.WithError(err).Error("unexpected error during SET rollback")
+			}
+		}
+
+		err = s.engine.Write(args.Losers, 0, setOperator, setRollbackOperator, keyvaluestore.OperationModeConcurrent)
+		if err != nil {
+			logrus.WithError(err).Error("unexpected error during read repair")
+		}
+	}
+
+	rawResult, err := s.performRead(request.Key, keyvaluestore.ReadOptions{
+		Consistency: request.Options.Consistency,
+	}, readOperator, repairOperator, s.booleanComparer)
+	if err != nil {
+		if err == keyvaluestore.ErrNotFound {
+			return &keyvaluestore.ExpireResponse{Exists: false}, nil
+		}
+
+		return nil, s.convertErrorToGRPC(err)
+	}
+
+	return &keyvaluestore.ExpireResponse{Exists: rawResult.(bool)}, nil
+}
+
 func (s *coreService) Exists(ctx context.Context,
 	request *keyvaluestore.ExistsRequest) (*keyvaluestore.ExistsResponse, error) {
 

@@ -140,3 +140,26 @@ func (m *Mock_Service) GetTTL(ctx context.Context, request *GetTTLRequest) (*Get
 
 	return r0, r1
 }
+
+func (m *Mock_Service) Expire(ctx context.Context, request *ExpireRequest) (*ExpireResponse, error) {
+	ret := m.Called(ctx, request)
+
+	var r0 *ExpireResponse
+	if rf, ok := ret.Get(0).(func(ctx context.Context, request *ExpireRequest) *ExpireResponse); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*ExpireResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(ctx context.Context, request *ExpireRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+
+}
