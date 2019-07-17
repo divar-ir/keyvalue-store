@@ -27,6 +27,17 @@ func TestRedisBackendTestSuite(t *testing.T) {
 	suite.Run(t, new(RedisBackendTestSuite))
 }
 
+func (s *RedisBackendTestSuite) TestExpireShouldExployExpireOnDatabase() {
+	s.NoError(s.db.Set(KEY, VALUE))
+	s.NoError(s.backend.Expire(KEY, 1*time.Second))
+	s.True(s.db.TTL(KEY) > 500*time.Millisecond)
+	s.True(s.db.TTL(KEY) < 1500*time.Millisecond)
+}
+
+func (s *RedisBackendTestSuite) TestExpireOnNonExistingKeyShouldReturnErrNotFound() {
+	s.Equal(keyvaluestore.ErrNotFound, s.backend.Expire(KEY, 1*time.Second))
+}
+
 func (s *RedisBackendTestSuite) TestSetShouldEmployKeyValueOnDatabase() {
 	s.Nil(s.backend.Set(KEY, []byte(VALUE), 0))
 	s.db.CheckGet(s.T(), KEY, VALUE)

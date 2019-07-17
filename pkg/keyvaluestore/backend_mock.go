@@ -153,3 +153,16 @@ func (m *Mock_Backend) Exists(key string) (bool, error) {
 
 	return r0, r1
 }
+
+func (m *Mock_Backend) Expire(key string, expiration time.Duration) error {
+	ret := m.Called(key, expiration)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(key string, expiration time.Duration) error); ok {
+		r0 = rf(key, expiration)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}

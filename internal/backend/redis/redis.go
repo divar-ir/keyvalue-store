@@ -32,6 +32,21 @@ func (r *redisBackend) Set(key string, value []byte, expiration time.Duration) e
 	return r.client.Set(key, value, expiration).Err()
 }
 
+func (r *redisBackend) Expire(key string, expiration time.Duration) error {
+	if r.client == nil {
+		return keyvaluestore.ErrClosed
+	}
+
+	ok, err := r.client.Expire(key, expiration).Result()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return keyvaluestore.ErrNotFound
+	}
+	return nil
+}
+
 func (r *redisBackend) Lock(key string, value []byte, expiration time.Duration) error {
 	if r.client == nil {
 		return keyvaluestore.ErrClosed
