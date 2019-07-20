@@ -388,6 +388,102 @@ func (s *RedisTransportTestSuite) TestExpireShouldCountNonExistingKeyAsIntergerZ
 	wg.Wait()
 }
 
+func (s *RedisTransportTestSuite) TestExpireShouldSendExpireTimeCorrectly() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Expire", mock.Anything, mock.MatchedBy(func(expireRequest *keyvaluestore.ExpireRequest) bool {
+		defer wg.Done()
+
+		s.True(expireRequest.Expiration > 59*time.Second)
+		s.True(expireRequest.Expiration < 61*time.Second)
+
+		return expireRequest.Expiration > 59*time.Second && expireRequest.Expiration < 61*time.Second
+	})).Once().Return(&keyvaluestore.ExpireResponse{
+		Exists: false,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.Expire(Key, 1*time.Minute).Result()
+	s.Nil(err)
+	s.Equal(false, ok)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestPExpireShouldSendExpireTimeCorrectly() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Expire", mock.Anything, mock.MatchedBy(func(expireRequest *keyvaluestore.ExpireRequest) bool {
+		defer wg.Done()
+
+		s.True(expireRequest.Expiration > 59*time.Second)
+		s.True(expireRequest.Expiration < 61*time.Second)
+
+		return expireRequest.Expiration > 59*time.Second && expireRequest.Expiration < 61*time.Second
+	})).Once().Return(&keyvaluestore.ExpireResponse{
+		Exists: false,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.PExpire(Key, 1*time.Minute).Result()
+	s.Nil(err)
+	s.Equal(false, ok)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestExpireAtShouldSendExpireTimeCorrectly() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Expire", mock.Anything, mock.MatchedBy(func(expireRequest *keyvaluestore.ExpireRequest) bool {
+		defer wg.Done()
+
+		s.True(expireRequest.Expiration > 59*time.Second)
+		s.True(expireRequest.Expiration < 61*time.Second)
+
+		return expireRequest.Expiration > 59*time.Second && expireRequest.Expiration < 61*time.Second
+	})).Once().Return(&keyvaluestore.ExpireResponse{
+		Exists: false,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.ExpireAt(Key, time.Now().Add(1*time.Minute)).Result()
+	s.Nil(err)
+	s.Equal(false, ok)
+	wg.Wait()
+}
+
+func (s *RedisTransportTestSuite) TestPExpireAtShouldSendExpireTimeCorrectly() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	core := &keyvaluestore.Mock_Service{}
+	core.On("Expire", mock.Anything, mock.MatchedBy(func(expireRequest *keyvaluestore.ExpireRequest) bool {
+		defer wg.Done()
+
+		s.True(expireRequest.Expiration > 59*time.Second)
+		s.True(expireRequest.Expiration < 61*time.Second)
+
+		return expireRequest.Expiration > 59*time.Second && expireRequest.Expiration < 61*time.Second
+	})).Once().Return(&keyvaluestore.ExpireResponse{
+		Exists: false,
+	}, nil)
+
+	s.runServer(core)
+	client := s.makeClient()
+	ok, err := client.PExpireAt(Key, time.Now().Add(1*time.Minute)).Result()
+	s.Nil(err)
+	s.Equal(false, ok)
+	wg.Wait()
+}
+
 func (s *RedisTransportTestSuite) TestExistsShouldCountExistingKeyAsIntergerOne() {
 	var wg sync.WaitGroup
 	wg.Add(1)

@@ -359,9 +359,9 @@ func (s *redisServer) handleExpireCommand(
 
 	if expireAt {
 		if timeInSeconds {
-			duration = time.Unix(durationInteger, 0).Sub(time.Now())
+			duration = time.Until(time.Unix(durationInteger, 0))
 		} else {
-			duration = time.Unix(durationInteger/1000, (durationInteger%1000)*1000000).Sub(time.Now())
+			duration = time.Until(time.Unix(durationInteger/1000, (durationInteger%1000)*1000000))
 		}
 	} else {
 		if timeInSeconds {
