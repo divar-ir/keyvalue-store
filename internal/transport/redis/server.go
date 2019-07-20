@@ -188,6 +188,9 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "PEXPIREAT":
 		err = s.handleExpireCommand(command, writer, "PEXPIREAT", false, true)
 
+	case "SELECT":
+		err = s.handleSelectCommand(command, writer)
+
 	default:
 		logrus.WithField("cmd", cmd).Error("command not supported")
 
@@ -658,6 +661,23 @@ func (s *redisServer) handleGetCommand(command *redisproto.Command, writer *redi
 	}
 
 	return writer.WriteBulk(result.Data)
+}
+
+func (s *redisServer) handleSelectCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() != 2 {
+		return wrapStringAsError("expected 1 argument for SELECT command")
+	}
+
+	db, err := strconv.Atoi(string(command.Get(1)))
+	if err != nil {
+		return wrapError(err)
+	}
+
+	if db != 0 {
+		return wrapStringAsError("only DB `0` is supported by SELECT command")
+	}
+
+	return writer.WriteBulkString("OK")
 }
 
 func (s *redisServer) handlePingCommand(command *redisproto.Command, writer *redisproto.Writer) error {
