@@ -645,7 +645,7 @@ func (s *RedisTransportTestSuite) TestMGetShouldReturnNilInMiddleOfKeys() {
 }
 
 func (s *RedisTransportTestSuite) runServer(core keyvaluestore.Service) {
-	s.server = redis.New(core, s.port, CONSISTENCY, CONSISTENCY)
+	s.server = redis.New(core, s.port, 5*time.Minute, CONSISTENCY, CONSISTENCY)
 	s.Nil(s.server.Start())
 }
 

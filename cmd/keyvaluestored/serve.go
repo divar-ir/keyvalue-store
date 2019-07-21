@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cafebazaar/keyvalue-store/internal/core"
 	"github.com/pkg/profile"
@@ -206,6 +207,7 @@ func makeRedisServerOrPanic(svc keyvaluestore.Service, config *Config) keyvalues
 	}
 
 	return redisTransport.New(svc, config.RedisListenPort,
+		time.Duration(config.RedisConnectionTimeout)*time.Millisecond,
 		readConsistency, writeConsistency)
 }
 

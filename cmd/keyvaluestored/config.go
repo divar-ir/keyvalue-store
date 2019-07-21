@@ -10,6 +10,7 @@ import (
 // Config the application's configuration structure
 type Config struct {
 	RedisListenPort         int
+	RedisConnectionTimeout  int
 	StaticDiscovery         string
 	LocalConnection         string
 	DefaultWriteConsistency string
@@ -23,6 +24,7 @@ type Config struct {
 func LoadConfig(cmd *cobra.Command, envPrefix string) (*Config, error) {
 	// Setting defaults for this application
 	viper.SetDefault("redisListenPort", 6380)
+	viper.SetDefault("redisConnectionTimeout", 30000)
 	viper.SetDefault("backend", "redis")
 	viper.SetDefault("staticDiscovery", "")
 	viper.SetDefault("localConnection", "")

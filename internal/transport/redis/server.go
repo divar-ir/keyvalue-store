@@ -21,16 +21,18 @@ import (
 )
 
 const (
-	defaultTimeout = 1 * time.Second
+	defaultTimeout           = 1 * time.Second
+	defaultConnectionTimeout = 30 * time.Second
 )
 
 type redisServer struct {
-	listenPort       int
-	core             keyvaluestore.Service
-	readConsistency  keyvaluestore.ConsistencyLevel
-	writeConsistency keyvaluestore.ConsistencyLevel
-	wg               sync.WaitGroup
-	listener         net.Listener
+	listenPort        int
+	core              keyvaluestore.Service
+	readConsistency   keyvaluestore.ConsistencyLevel
+	writeConsistency  keyvaluestore.ConsistencyLevel
+	wg                sync.WaitGroup
+	listener          net.Listener
+	connectionTimeout time.Duration
 }
 
 type commandExecutionError struct {
@@ -52,14 +54,20 @@ func wrapError(err error) error {
 }
 
 func New(core keyvaluestore.Service, listenPort int,
+	connectionTimeout time.Duration,
 	readConsistency keyvaluestore.ConsistencyLevel,
 	writeConsistency keyvaluestore.ConsistencyLevel) keyvaluestore.Server {
 
+	if connectionTimeout == 0 {
+		connectionTimeout = defaultConnectionTimeout
+	}
+
 	return &redisServer{
-		core:             core,
-		listenPort:       listenPort,
-		readConsistency:  readConsistency,
-		writeConsistency: writeConsistency,
+		core:              core,
+		listenPort:        listenPort,
+		readConsistency:   readConsistency,
+		writeConsistency:  writeConsistency,
+		connectionTimeout: connectionTimeout,
 	}
 }
 
@@ -108,13 +116,32 @@ func (s *redisServer) handleConnection(conn net.Conn) {
 	writer := redisproto.NewWriter(bufio.NewWriter(conn))
 
 	for {
-		if err := s.connectionLoop(parser, writer); err != nil {
+		if err := s.connectionLoopWithTimeout(parser, writer); err != nil {
 			if err != keyvaluestore.ErrClosed {
 				logrus.WithError(err).Error("unexpected error while handling connection")
 			}
 
 			return
 		}
+	}
+}
+
+func (s *redisServer) connectionLoopWithTimeout(parser *redisproto.Parser, writer *redisproto.Writer) error {
+	connectionTimeoutTicker := time.NewTicker(s.connectionTimeout)
+	defer connectionTimeoutTicker.Stop()
+
+	errChannel := make(chan error, 1)
+
+	go func() {
+		errChannel <- s.connectionLoop(parser, writer)
+	}()
+
+	select {
+	case err := <-errChannel:
+		return err
+
+	case <-connectionTimeoutTicker.C:
+		return keyvaluestore.ErrClosed
 	}
 }
 
