@@ -166,3 +166,16 @@ func (m *Mock_Backend) Expire(key string, expiration time.Duration) error {
 
 	return r0
 }
+
+func (m *Mock_Backend) FlushDB() error {
+	ret := m.Called()
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func() error); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}

@@ -15,6 +15,7 @@ type Backend interface {
 	TTL(key string) (*time.Duration, error)
 	Get(key string) ([]byte, error)
 	Delete(key string) error
+	FlushDB() error
 	Exists(key string) (bool, error)
 	Address() string
 }

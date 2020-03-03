@@ -95,4 +95,5 @@ type Service interface {
 	Exists(ctx context.Context, request *ExistsRequest) (*ExistsResponse, error)
 	GetTTL(ctx context.Context, request *GetTTLRequest) (*GetTTLResponse, error)
 	Expire(ctx context.Context, request *ExpireRequest) (*ExpireResponse, error)
+	FlushDB(ctx context.Context) error
 }

@@ -83,7 +83,6 @@ func (r *redisBackend) TTL(key string) (*time.Duration, error) {
 
 		return nil, err
 	}
-
 	switch {
 	case result == -2*time.Second:
 		return nil, keyvaluestore.ErrNotFound
@@ -128,6 +127,14 @@ func (r *redisBackend) Delete(key string) error {
 	}
 
 	return r.client.Del(key).Err()
+}
+
+func (r *redisBackend) FlushDB() error {
+	if r.client == nil {
+		return keyvaluestore.ErrClosed
+	}
+
+	return r.client.FlushDB().Err()
 }
 
 func (r *redisBackend) Close() error {

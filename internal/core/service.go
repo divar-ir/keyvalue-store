@@ -167,6 +167,10 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent))
 }
 
+func (s *coreService) FlushDB(ctx context.Context) error {
+	return nil
+}
+
 func (s *coreService) Lock(ctx context.Context, request *keyvaluestore.LockRequest) error {
 	writeOperator := func(node keyvaluestore.Backend) error {
 		return node.Lock(request.Key, request.Data, request.Expiration)

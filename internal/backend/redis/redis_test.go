@@ -118,6 +118,12 @@ func (s *RedisBackendTestSuite) TestDeleteShouldDeleteExistingKey() {
 	s.False(s.db.Exists(KEY))
 }
 
+func (s *RedisBackendTestSuite) TestFlushDbShouldDeleteAllKeys() {
+	s.Nil(s.db.Set(KEY, VALUE))
+	s.Nil(s.backend.FlushDB())
+	s.False(s.db.Exists(KEY))
+}
+
 func (s *RedisBackendTestSuite) TestAddressShouldReturnCorrectAddress() {
 	s.Equal("localhost", s.backend.Address())
 }
