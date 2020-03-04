@@ -823,6 +823,16 @@ func (s *CoreServiceTestSuite) TestExistsShouldUseVotingModeFromClusterView() {
 	s.node1.AssertExpectations(s.T())
 }
 
+func (s *CoreServiceTestSuite) TestFlushDbShouldCallDeleteOnNodes() {
+	s.node1.On("FlushDB").Once().Return(nil)
+	s.applyCore()
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_ALL)
+	s.applyWriteToEngineOnce(1)
+	err := s.core.FlushDB(context.Background())
+	s.Nil(err)
+	s.node1.AssertExpectations(s.T())
+}
+
 func (s *CoreServiceTestSuite) TestDeleteShouldCallDeleteOnNodes() {
 	s.node1.On("Delete", KEY).Once().Return(nil)
 	s.applyCore()
@@ -1032,6 +1042,7 @@ func (s *CoreServiceTestSuite) applyCluster(
 
 	s.cluster.On("Read", KEY, consistency).Return(optionContext.readView, nil)
 	s.cluster.On("Write", KEY, consistency).Return(optionContext.writeView, nil)
+	s.cluster.On("FlushDB").Return(optionContext.writeView, nil)
 }
 
 func (s *CoreServiceTestSuite) withVotingMode(mode keyvaluestore.VotingMode) clusterOption {

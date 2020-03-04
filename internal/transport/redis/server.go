@@ -218,6 +218,9 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "SELECT":
 		err = s.handleSelectCommand(command, writer)
 
+	case "FLUSHDB":
+		err = s.handleFlushDbCommand(command, writer)
+
 	default:
 		logrus.WithField("cmd", cmd).Error("command not supported")
 
@@ -585,6 +588,18 @@ func (s *redisServer) handleDeleteCommand(command *redisproto.Command, writer *r
 	}
 
 	return writer.WriteInt(int64(command.ArgCount() - 1))
+}
+
+func (s *redisServer) handleFlushDbCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	err := s.core.FlushDB(ctx)
+	if err != nil {
+		return wrapError(err)
+	}
+
+	return writer.WriteBulkString("OK")
 }
 
 func (s *redisServer) handlerMGetCommand(command *redisproto.Command, writer *redisproto.Writer) error {

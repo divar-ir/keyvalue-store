@@ -158,6 +158,14 @@ func (s staticCluster) Write(key string,
 	}
 }
 
+func (s staticCluster) FlushDB() (keyvaluestore.WriteClusterView, error) {
+	allNodes := s.allNodes()
+	return keyvaluestore.WriteClusterView{
+		Backends:            allNodes,
+		AcknowledgeRequired: len(allNodes),
+	}, nil
+}
+
 func (s staticCluster) Close() error {
 	var lastErr error
 

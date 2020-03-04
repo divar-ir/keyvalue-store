@@ -133,6 +133,13 @@ func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnAllNodesInConsisten
 	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
 }
 
+func (s *StaticClusterTestSuite) TestFlushDbShouldReturnAllBackends() {
+	view, err := s.makeCluster(3, false).FlushDB()
+	s.Nil(err)
+	s.Equal(3, len(view.Backends))
+	s.Subset(view.Backends, []keyvaluestore.Backend{s.node1, s.node2, s.node3})
+}
+
 func (s *StaticClusterTestSuite) TestReadBackendsShouldReturnAllNodesInConsistencyMajority() {
 	view, err := s.makeCluster(3, false).Read("", keyvaluestore.ConsistencyLevel_MAJORITY)
 	s.Nil(err)

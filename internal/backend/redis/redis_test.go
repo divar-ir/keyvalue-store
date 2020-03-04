@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	KEY   = "key"
-	VALUE = "hello"
+	KEY    = "key"
+	VALUE  = "hello"
+	KEY2   = "key2"
+	VALUE2 = "hello"
 )
 
 type RedisBackendTestSuite struct {
@@ -120,8 +122,10 @@ func (s *RedisBackendTestSuite) TestDeleteShouldDeleteExistingKey() {
 
 func (s *RedisBackendTestSuite) TestFlushDbShouldDeleteAllKeys() {
 	s.Nil(s.db.Set(KEY, VALUE))
+	s.Nil(s.db.Set(KEY2, VALUE2))
 	s.Nil(s.backend.FlushDB())
 	s.False(s.db.Exists(KEY))
+	s.False(s.db.Exists(KEY2))
 }
 
 func (s *RedisBackendTestSuite) TestAddressShouldReturnCorrectAddress() {

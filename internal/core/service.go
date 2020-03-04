@@ -168,7 +168,7 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 }
 
 func (s *coreService) FlushDB(ctx context.Context) error {
-	return nil
+	return s.convertErrorToGRPC(s.performFlushDb())
 }
 
 func (s *coreService) Lock(ctx context.Context, request *keyvaluestore.LockRequest) error {
@@ -512,6 +512,23 @@ func (s *coreService) performWrite(key string,
 	}
 
 	return s.engine.Write(view.Backends, view.AcknowledgeRequired, operator, rollback, mode)
+}
+
+func (s *coreService) performFlushDb() error {
+
+	operator := func(node keyvaluestore.Backend) error {
+		return node.FlushDB()
+	}
+
+	rollback := func(args keyvaluestore.RollbackArgs) {
+	}
+
+	view, err := s.cluster.FlushDB()
+	if err != nil {
+		return err
+	}
+	return s.engine.Write(view.Backends, view.AcknowledgeRequired, operator, rollback,
+		keyvaluestore.OperationModeConcurrent)
 }
 
 func (s *coreService) performRead(key string,

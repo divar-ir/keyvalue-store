@@ -16,6 +16,7 @@ type Cluster interface {
 
 	Read(key string, consistency ConsistencyLevel) (ReadClusterView, error)
 	Write(key string, consistency ConsistencyLevel) (WriteClusterView, error)
+	FlushDB() (WriteClusterView, error)
 }
 
 type ReadClusterView struct {

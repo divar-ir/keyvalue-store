@@ -62,3 +62,25 @@ func (m *Mock_Cluster) Write(key string, consistency ConsistencyLevel) (WriteClu
 
 	return r0, r1
 }
+
+func (m *Mock_Cluster) FlushDB() (WriteClusterView, error) {
+	ret := m.Called()
+
+	var r0 WriteClusterView
+	if rf, ok := ret.Get(0).(func() WriteClusterView); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(WriteClusterView)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
