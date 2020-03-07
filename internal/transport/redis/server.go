@@ -203,6 +203,9 @@ func (s *redisServer) dispatchCommand(command *redisproto.Command, writer *redis
 	case "TTL":
 		err = s.handleTTLCommand(command, writer)
 
+	case "PTTL":
+		err = s.handlePTTLCommand(command, writer)
+
 	case "EXPIRE":
 		err = s.handleExpireCommand(command, writer, "EXPIRE", true, false)
 
@@ -337,6 +340,39 @@ func (s *redisServer) handleSetCommand(command *redisproto.Command, writer *redi
 	}
 
 	return writer.WriteBulkString("OK")
+}
+
+func (s *redisServer) handlePTTLCommand(command *redisproto.Command, writer *redisproto.Writer) error {
+	if command.ArgCount() != 2 {
+		return wrapStringAsError("expected exactly 2 arguments for PTTL command")
+	}
+
+	key := string(command.Get(1))
+	request := &keyvaluestore.GetTTLRequest{
+		Key: key,
+		Options: keyvaluestore.ReadOptions{
+			Consistency: s.readConsistency,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	response, err := s.core.GetTTL(ctx, request)
+	if err != nil {
+		grpcStatus, ok := status.FromError(err)
+
+		if ok && (grpcStatus.Code() == codes.NotFound || grpcStatus.Code() == codes.Unavailable) {
+			return writer.WriteInt(-2)
+		}
+		return wrapError(err)
+	}
+
+	if response.TTL == nil {
+		return writer.WriteInt(-1)
+	}
+
+	return writer.WriteInt(int64(*response.TTL) / int64(time.Millisecond))
 }
 
 func (s *redisServer) handleTTLCommand(command *redisproto.Command, writer *redisproto.Writer) error {

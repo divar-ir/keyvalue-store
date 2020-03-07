@@ -75,7 +75,7 @@ func (r *redisBackend) TTL(key string) (*time.Duration, error) {
 		return nil, keyvaluestore.ErrClosed
 	}
 
-	result, err := r.client.TTL(key).Result()
+	result, err := r.client.PTTL(key).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, keyvaluestore.ErrNotFound
@@ -84,10 +84,10 @@ func (r *redisBackend) TTL(key string) (*time.Duration, error) {
 		return nil, err
 	}
 	switch {
-	case result == -2*time.Second:
+	case result == -2*time.Millisecond:
 		return nil, keyvaluestore.ErrNotFound
 
-	case result == -1*time.Second:
+	case result == -1*time.Millisecond:
 		return nil, nil
 
 	default:
