@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -33,6 +34,57 @@ func (r *redisBackend) Set(key string, value []byte, expiration time.Duration) e
 	}
 
 	return client.Set(key, value, expiration).Err()
+}
+
+func (r *redisBackend) Lock(ctx context.Context, key string, expiration time.Duration) error {
+	var err error
+	var ok bool
+
+	ok, err = r.tryLock(key, expiration)
+	if err != nil {
+		return err
+	}
+	if ok {
+		return nil
+	}
+
+	retryTicker := time.NewTicker(100 * time.Millisecond)
+	defer retryTicker.Stop()
+
+	for {
+		select {
+		case <-retryTicker.C:
+			ok, err = r.tryLock(key, expiration)
+			if err != nil {
+				return err
+			}
+			if ok {
+				return nil
+			}
+			continue
+
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (r *redisBackend) tryLock(key string, expiration time.Duration) (bool, error) {
+	client := r.tryGetClient()
+	if client == nil {
+		return false, keyvaluestore.ErrClosed
+	}
+
+	return client.SetNX(key, "-", expiration).Result()
+}
+
+func (r *redisBackend) Unlock(key string) error {
+	client := r.tryGetClient()
+	if client == nil {
+		return keyvaluestore.ErrClosed
+	}
+
+	return client.Del(key).Err()
 }
 
 func (r *redisBackend) TTL(key string) (*time.Duration, error) {

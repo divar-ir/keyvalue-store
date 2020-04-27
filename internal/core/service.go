@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -158,6 +159,45 @@ func (s *coreService) Delete(ctx context.Context, request *keyvaluestore.DeleteR
 		writeOperator, rollbackOperator, keyvaluestore.OperationModeConcurrent)
 }
 
+func (s *coreService) Lock(ctx context.Context, request *keyvaluestore.LockRequest) error {
+	writeOperator := func(node keyvaluestore.Backend) error {
+		return node.Lock(ctx, request.Key, request.Expiration)
+	}
+
+	unlockOperator := func(node keyvaluestore.Backend) error {
+		return node.Unlock(request.Key)
+	}
+
+	unlockRollbackOperator := func(args keyvaluestore.RollbackArgs) {
+	}
+
+	rollbackOperator := func(args keyvaluestore.RollbackArgs) {
+		err := s.engine.Write(args.Nodes, 0, unlockOperator, unlockRollbackOperator,
+			keyvaluestore.OperationModeConcurrent)
+
+		if err != nil {
+			logrus.WithError(err).Error("unexpected error during LOCK rollback")
+		}
+	}
+
+	// Use sequential (ordered) write sequence to prevent dining philosopher problem
+	// (a.k.a chance of deadlock)
+	return s.performWrite(request.Key, request.Options, writeOperator,
+		rollbackOperator, keyvaluestore.OperationModeSequential)
+}
+
+func (s *coreService) Unlock(ctx context.Context, request *keyvaluestore.UnlockRequest) error {
+	writeOperator := func(backend keyvaluestore.Backend) error {
+		return backend.Unlock(request.Key)
+	}
+
+	rollbackOperator := func(args keyvaluestore.RollbackArgs) {
+	}
+
+	return s.performWrite(request.Key, request.Options, writeOperator,
+		rollbackOperator, keyvaluestore.OperationModeConcurrent)
+}
+
 func (s *coreService) performWrite(key string,
 	options keyvaluestore.WriteOptions,
 	operator keyvaluestore.WriteOperator,
@@ -167,6 +207,13 @@ func (s *coreService) performWrite(key string,
 	consistency := s.writeConsistency(options)
 	nodes := s.cluster.WriteBackends(key, consistency)
 	acknowledgeCount := s.cluster.WriteAcknowledgeRequired(key, consistency)
+
+	// Use sequential (ordered)[deterministic order guarantee]
+	// write sequence to prevent dining philosopher problem
+	// (a.k.a chance of deadlock)
+	if mode == keyvaluestore.OperationModeSequential {
+		nodes = s.sortNodes(nodes)
+	}
 
 	return s.engine.Write(nodes, acknowledgeCount, operator, rollback, mode)
 }
@@ -182,6 +229,17 @@ func (s *coreService) performRead(key string,
 	votesRequired := s.cluster.ReadVoteRequired(key, consistency)
 
 	return s.engine.Read(nodes, votesRequired, readOperator, repairOperator, comparer)
+}
+
+func (s *coreService) sortNodes(nodes []keyvaluestore.Backend) []keyvaluestore.Backend {
+	var result []keyvaluestore.Backend
+	result = append(result, nodes...)
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Address() < result[j].Address()
+	})
+
+	return result
 }
 
 func (s *coreService) Close() error {

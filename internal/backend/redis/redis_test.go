@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -113,6 +114,57 @@ func (s *RedisBackendTestSuite) TestDeleteShouldDeleteExistingKey() {
 
 func (s *RedisBackendTestSuite) TestAddressShouldReturnCorrectAddress() {
 	s.Equal("localhost", s.backend.Address())
+}
+
+func (s *RedisBackendTestSuite) TestLockShouldSucceedOnCleanDatabase() {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
+	s.True(s.db.Exists(KEY))
+}
+
+func (s *RedisBackendTestSuite) TestUnlockShouldReleasePreviouslyLockedKey() {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
+	s.Nil(s.backend.Unlock(KEY))
+	s.False(s.db.Exists(KEY))
+}
+
+func (s *RedisBackendTestSuite) TestConsecutiveLockShouldFail() {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
+	s.Equal(context.DeadlineExceeded, s.backend.Lock(ctx, KEY, 1*time.Second))
+}
+
+func (s *RedisBackendTestSuite) TestAfterUnlockShouldBeLockable() {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
+	s.Nil(s.backend.Unlock(KEY))
+	s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
+}
+
+func (s *RedisBackendTestSuite) TestLockShouldSucceedIfWaiting() {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	lockAcquired := make(chan struct{})
+	go func() {
+		s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
+		close(lockAcquired)
+		time.Sleep(100 * time.Millisecond)
+		s.Nil(s.backend.Unlock(KEY))
+	}()
+
+	<-lockAcquired
+
+	s.Nil(s.backend.Lock(ctx, KEY, 1*time.Second))
 }
 
 func (s *RedisBackendTestSuite) SetupTest() {

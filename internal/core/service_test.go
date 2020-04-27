@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -325,6 +326,57 @@ func (s *CoreServiceTestSuite) TestDeleteShouldUseDefaultWriteConsistencyIfNotPr
 	}))
 }
 
+func (s *CoreServiceTestSuite) TestLockShouldCallLockOnNode() {
+	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.applyWriteToEngineOnce(1, WithMode(keyvaluestore.OperationModeSequential))
+	s.node1.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
+	s.Nil(s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
+		Key: KEY,
+	}))
+}
+
+func (s *CoreServiceTestSuite) TestLockShouldPreserveOrder() {
+	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(3, keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.applyWriteToEngineOnce(3, WithOrdering(s.node3, s.node2, s.node1),
+		WithMode(keyvaluestore.OperationModeSequential))
+	s.node1.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
+	s.node2.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
+	s.node3.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(nil)
+	s.Nil(s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
+		Key: KEY,
+	}))
+}
+
+func (s *CoreServiceTestSuite) TestLockShouldRollbackUsingUnlock() {
+	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.applyWriteToEngineOnce(1,
+		WithMode(keyvaluestore.OperationModeSequential),
+		WithRollbackArgs(keyvaluestore.RollbackArgs{
+			Nodes: []keyvaluestore.Backend{s.node1},
+		}))
+	s.applyWriteToEngineOnce(0)
+	s.node1.On("Lock", mock.Anything, KEY, mock.Anything).Once().Return(errors.New("some error"))
+	s.node1.On("Unlock", KEY).Once().Return(nil)
+	s.Nil(s.core.Lock(context.Background(), &keyvaluestore.LockRequest{
+		Key: KEY,
+	}))
+	s.node1.AssertExpectations(s.T())
+}
+
+func (s *CoreServiceTestSuite) TestUnlockShouldCallUnlockOnBackends() {
+	s.applyCore(core.WithDefaultWriteConsistency(keyvaluestore.ConsistencyLevel_MAJORITY))
+	s.applyCluster(1, keyvaluestore.ConsistencyLevel_MAJORITY)
+	s.applyWriteToEngineOnce(1)
+	s.node1.On("Unlock", KEY).Once().Return(nil)
+	s.Nil(s.core.Unlock(context.Background(), &keyvaluestore.UnlockRequest{
+		Key: KEY,
+	}))
+	s.node1.AssertExpectations(s.T())
+}
+
 func (s *CoreServiceTestSuite) applyWriteToEngineOnce(nodeCount int, options ...Option) {
 	optionCtx := newOptionContext()
 	for _, option := range options {
@@ -335,11 +387,25 @@ func (s *CoreServiceTestSuite) applyWriteToEngineOnce(nodeCount int, options ...
 		optionCtx.mode).Run(func(args mock.Arguments) {
 
 		backends := args.Get(0).([]keyvaluestore.Backend)
+
+		if optionCtx.ordering != nil {
+			s.Equal(len(optionCtx.ordering), len(backends))
+			for i := 0; i < len(optionCtx.ordering) && i < len(backends); i++ {
+				s.Equal(backends[i], optionCtx.ordering[i])
+			}
+		}
+
 		operator := args.Get(2).(keyvaluestore.WriteOperator)
 		for _, backend := range backends {
 			if err := operator(backend); err != nil {
 				logrus.WithError(err).Info("error during test")
 			}
+		}
+
+		rollbackOperator := args.Get(3).(keyvaluestore.RollbackOperator)
+
+		if optionCtx.rollbackArgs != nil {
+			rollbackOperator(*optionCtx.rollbackArgs)
 		}
 	}).Return(nil)
 }
@@ -379,16 +445,16 @@ func (s *CoreServiceTestSuite) applyCore(options ...core.Option) {
 }
 
 type optionContext struct {
-	mode             keyvaluestore.OperationMode
-	rollbackOperator keyvaluestore.RollbackOperator
+	mode         keyvaluestore.OperationMode
+	ordering     []*keyvaluestore.Mock_Backend
+	rollbackArgs *keyvaluestore.RollbackArgs
 }
 
 type Option func(o *optionContext)
 
 func newOptionContext() *optionContext {
 	return &optionContext{
-		mode:             keyvaluestore.OperationModeConcurrent,
-		rollbackOperator: func(args keyvaluestore.RollbackArgs) {},
+		mode: keyvaluestore.OperationModeConcurrent,
 	}
 }
 
@@ -398,9 +464,19 @@ func WithMode(mode keyvaluestore.OperationMode) Option {
 	}
 }
 
-func WithRollbackOperator(rollbackOperator keyvaluestore.RollbackOperator) Option {
+func WithOrdering(nodes ...*keyvaluestore.Mock_Backend) Option {
+	for i, node := range nodes {
+		node.On("Address").Return(fmt.Sprintf("host-%d", i))
+	}
+
 	return func(o *optionContext) {
-		o.rollbackOperator = rollbackOperator
+		o.ordering = nodes
+	}
+}
+
+func WithRollbackArgs(args keyvaluestore.RollbackArgs) Option {
+	return func(o *optionContext) {
+		o.rollbackArgs = &args
 	}
 }
 

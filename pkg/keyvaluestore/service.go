@@ -22,6 +22,18 @@ type SetRequest struct {
 	Options    WriteOptions
 }
 
+type LockRequest struct {
+	Key        string
+	Data       []byte
+	Expiration time.Duration
+	Options    WriteOptions
+}
+
+type UnlockRequest struct {
+	Key     string
+	Options WriteOptions
+}
+
 type GetRequest struct {
 	Key     string
 	Options ReadOptions
@@ -50,4 +62,6 @@ type Service interface {
 	Set(ctx context.Context, request *SetRequest) error
 	Get(ctx context.Context, request *GetRequest) (*GetResponse, error)
 	Delete(ctx context.Context, request *DeleteRequest) error
+	Lock(ctx context.Context, request *LockRequest) error
+	Unlock(ctx context.Context, request *UnlockRequest) error
 }

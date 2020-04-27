@@ -70,3 +70,29 @@ func (m *Mock_Service) Delete(ctx context.Context, request *DeleteRequest) error
 
 	return r0
 }
+
+func (m *Mock_Service) Lock(ctx context.Context, request *LockRequest) error {
+	ret := m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(ctx context.Context, request *LockRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+func (m *Mock_Service) Unlock(ctx context.Context, request *UnlockRequest) error {
+	ret := m.Called(ctx, request)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(ctx context.Context, request *UnlockRequest) error); ok {
+		r0 = rf(ctx, request)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
