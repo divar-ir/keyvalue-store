@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/cafebazaar/keyvalue-store.svg?branch=master)](https://travis-ci.org/cafebazaar/keyvalue-store)
+
 # Key Value Store
 
 A distributed cache using Redis backend.
